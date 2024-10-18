@@ -1,23 +1,34 @@
-import logo from './logo.svg';
+import React, { useState } from 'react';
 import './App.css';
+import UltrasoundVisualizer from './UltrasoundVisualizer';
 
 function App() {
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      console.log('File selected:', file.name, 'Type:', file.type, 'Size:', file.size);
+      setVideoUrl(URL.createObjectURL(file));
+    }
+  };
+
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
+        <h1>Ultrasound Visualizer</h1>
+        <input type="file" accept="video/*" onChange={handleFileUpload} />
       </header>
+      <main className="App-main">
+        {error && <p className="error">{error}</p>}
+        {videoUrl && (
+          <UltrasoundVisualizer
+            videoUrl={videoUrl}
+            setError={setError}
+          />
+        )}
+      </main>
     </div>
   );
 }
