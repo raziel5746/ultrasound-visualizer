@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { FaAdjust, FaSun, FaLayerGroup, FaImages, FaEye, FaPalette, FaExchangeAlt } from 'react-icons/fa';
+import { FaAdjust, FaSun, FaLayerGroup, FaImages, FaEye, FaPalette, FaExchangeAlt, FaCog, FaChevronUp, FaChevronDown } from 'react-icons/fa';
 
 const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   const mountRef = useRef(null);
@@ -48,6 +48,9 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
 
   const [isFrameOrderInverted, setIsFrameOrderInverted] = useState(false);
 
+  const [isMobile, setIsMobile] = useState(false);
+  const [isControlPanelOpen, setIsControlPanelOpen] = useState(true);
+
   const handleSliceStartChange = (value) => {
     const newStart = Math.max(0, Math.min(value, sliceEnd - 1));
     const newWidth = sliceEnd - newStart;
@@ -83,10 +86,31 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   }, [contrast, brightness, opacity, isBlackAndWhite, isInverted]);
 
   useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
+
+  useEffect(() => {
     const updateCanvasSize = () => {
       const headerHeight = document.querySelector('.App-header').offsetHeight;
-      const newHeight = window.innerHeight - headerHeight;
-      const newWidth = window.innerWidth - controlPanelWidth;
+      let newHeight, newWidth;
+
+      if (isMobile) {
+        newHeight = isControlPanelOpen ? window.innerHeight - headerHeight - 300 : window.innerHeight - headerHeight - 50;
+        newWidth = window.innerWidth;
+      } else {
+        newHeight = window.innerHeight - headerHeight;
+        newWidth = window.innerWidth - controlPanelWidth;
+      }
+
       setCanvasHeight(newHeight);
       setCanvasWidth(newWidth);
     };
@@ -97,7 +121,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     return () => {
       window.removeEventListener('resize', updateCanvasSize);
     };
-  }, []);
+  }, [isMobile, isControlPanelOpen]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -147,11 +171,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
 
   const updateFrameStack = useCallback(() => {
     if (!sceneRef.current || !cameraRef.current || !controlsRef.current || frames.length === 0) {
-      console.log('Cannot update frame stack:', { scene: sceneRef.current, camera: cameraRef.current, controls: controlsRef.current, framesLength: frames.length });
       return;
     }
-
-    console.log('Updating frame stack, total frames:', frames.length);
 
     cameraPositionRef.current.copy(cameraRef.current.position);
     cameraRotationRef.current.copy(cameraRef.current.rotation);
@@ -243,8 +264,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
         : Math.min(Math.floor(i * step), frames.length - 1);
       const frameTexture = frames[frameIndex];
 
-      console.log(`Frame ${i}: Using frame index ${frameIndex}, texture UUID: ${frameTexture.uuid}`);
-
       const planeGeometry = new THREE.PlaneGeometry(1.6, 1);
       const planeMaterial = shaderMaterialRef.current.clone();
       planeMaterial.uniforms.uTexture.value = frameTexture;
@@ -280,25 +299,18 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     controlsRef.current.target.copy(controlsTargetRef.current);
 
     controlsRef.current.update();
-
-    console.log('Frame stack updated');
   }, [frames, stackLength, framePercentage, blendMode, opacity, contrast, brightness, isBlackAndWhite, isInverted, sliceStart, sliceEnd, isFrameOrderInverted]);
 
   useEffect(() => {
-    console.log('Frames updated:', frames.length);
     if (sceneRef.current && frames.length > 0) {
-      console.log('Updating frame stack');
       updateFrameStack();
     }
   }, [frames, updateFrameStack]);
 
   useEffect(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !controlsRef.current) {
-      console.log('Cannot start animation loop:', { renderer: rendererRef.current, scene: sceneRef.current, camera: cameraRef.current, controls: controlsRef.current });
       return;
     }
-
-    console.log('Starting animation loop');
 
     const animate = () => {
       requestAnimationFrame(animate);
@@ -329,14 +341,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
       const frameCount = Math.min(maxFrames, totalFrameCount);
       
       setTotalFrames(frameCount);
-      console.log('Extracting frames, total frames:', frameCount);
       const extractedFrames = [];
 
       const extractFrame = (currentFrame) => {
         return new Promise((resolveFrame) => {
           video.currentTime = (currentFrame * frameStep) / 30;
           video.onseeked = () => {
-            console.log(`Extracting frame ${currentFrame + 1}/${frameCount}`);
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -355,7 +365,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
           extractedFrames.push(frameTexture);
           setExtractionProgress((i + 1) / frameCount);
         }
-        console.log('Frames extracted:', extractedFrames.length);
         resolve(extractedFrames);
       };
 
@@ -386,14 +395,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
         setFrames(extractedFrames);
         setIsLocalLoading(false);
       } catch (error) {
-        console.error('Error extracting frames:', error);
         setError(`Error extracting frames: ${error.message}`);
         setIsLocalLoading(false);
       }
     };
 
     const handleVideoError = (e) => {
-      console.error('Video error event:', e);
       let errorMessage = 'Error loading video: ';
       if (e.target.error && e.target.error.code) {
         switch (e.target.error.code) {
@@ -459,7 +466,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   }, [isBlackAndWhite, isInverted, contrast, opacity, blendMode, stackLength, framePercentage, frames.length, updateFrameStack]);
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100%', overflow: 'hidden' }}>
       <div ref={mountRef} style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px`, position: 'relative' }}>
         {isLocalLoading && (
           <div style={{
@@ -517,177 +524,207 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
           Frames: {renderedFrames}
         </div>
       </div>
-      <div style={{
-        width: `${controlPanelWidth}px`,
-        height: '100%',
-        overflowY: 'auto',
-        padding: '20px',
-        boxSizing: 'border-box',
-        backgroundColor: '#f0f0f0',
-        borderLeft: '1px solid #ccc'
-      }}>
-        <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#333' }}>Control Panel</h3>
-        
-        <ControlItem
-          icon={<FaLayerGroup />}
-          label="Stack Length"
-          value={stackLength}
-          min={0.20}
-          max={3}
-          step={0.01}
-          onChange={(value) => {
-            setStackLength(value);
-            updateFrameStack();
+      {isMobile && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: '#f0f0f0',
+            borderTop: '1px solid #ccc',
+            padding: '10px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'pointer',
           }}
-        />
-
-        <ControlItem
-          icon={<FaImages />}
-          label="Frames to Show"
-          value={framePercentage}
-          min={1}
-          max={100}
-          step={0.1}
-          onChange={(value) => {
-            setFramePercentage(value);
-            updateFrameStack();
-          }}
-          unit="%"
-        />
-
-        <ControlItem
-          icon={<FaEye />}
-          label="Opacity"
-          value={opacity}
-          min={0}
-          max={1}
-          step={0.001}
-          onChange={setOpacity}
-          customScale={{
-            toSlider: (value) => value <= 0.1 ? value * 5 : 0.5 + (value - 0.1) * (0.5 / 0.9),
-            fromSlider: (value) => value <= 0.5 ? value / 5 : 0.1 + (value - 0.5) * (0.9 / 0.5)
-          }}
-        />
-
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={isBlackAndWhite}
-              onChange={() => setIsBlackAndWhite(!isBlackAndWhite)}
-              style={{ marginRight: '10px' }}
-            />
-            <FaAdjust style={{ marginRight: '10px' }} />
-            Black & White
-          </label>
+          onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
+        >
+          <FaCog style={{ marginRight: '10px' }} />
+          Control Panel
+          {isControlPanelOpen ? <FaChevronDown style={{ marginLeft: '10px' }} /> : <FaChevronUp style={{ marginLeft: '10px' }} />}
         </div>
-
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={isInverted}
-              onChange={() => setIsInverted(!isInverted)}
-              style={{ marginRight: '10px' }}
-            />
-            <FaAdjust style={{ marginRight: '10px' }} />
-            Invert Colors
-          </label>
-        </div>
-
-        <ControlItem
-          icon={<FaAdjust />}
-          label="Contrast"
-          value={contrast}
-          min={0}
-          max={1}
-          step={0.001}
-          onChange={setContrast}
-          customScale={{
-            toSlider: (value) => value <= 1 ? value * 0.5 : 0.5 + (value - 1) * 0.125,
-            fromSlider: (value) => value <= 0.5 ? value * 2 : 1 + (value - 0.5) * 8
-          }}
-        />
-
-        <ControlItem
-          icon={<FaSun />}
-          label="Brightness"
-          value={brightness}
-          min={0}
-          max={100}
-          step={0.1}
-          onChange={(value) => {
-            setBrightness(value);
-            updateFrameStack();
-          }}
-        />
-
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'flex', alignItems: 'center' }}>
-            <FaPalette style={{ marginRight: '10px' }} />
-            Blending Mode:
-          </label>
-          <select 
-            value={blendMode} 
-            onChange={(e) => setBlendMode(e.target.value)}
-            style={{
-              width: '100%',
-              marginTop: '5px',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ccc',
-              backgroundColor: 'white'
-            }}
-          >
-            <option value="Normal">Normal</option>
-            <option value="Additive">Additive</option>
-            <option value="Screen">Screen</option>
-            <option value="Overlay">Overlay</option>
-          </select>
-        </div>
-        
-        <ControlItem
-          label="Slice Start"
-          value={sliceStart}
-          min={0}
-          max={sliceEnd - 1}
-          onChange={handleSliceStartChange}
-          unit="%"
-        />
-        
-        <ControlItem
-          label="Slice End"
-          value={sliceEnd}
-          min={sliceStart + 1}
-          max={100}
-          onChange={handleSliceEndChange}
-          unit="%"
-        />
-
-        <ControlItem
-          label="Slice Position"
-          value={sliceStart}
-          min={0}
-          max={100 - sliceWidth}
-          onChange={handleSlicePositionChange}
-          unit="%"
-        />
-
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={isFrameOrderInverted}
-              onChange={() => {
-                setIsFrameOrderInverted(!isFrameOrderInverted);
+      )}
+      <div
+        style={{
+          width: isMobile ? '100%' : `${controlPanelWidth}px`,
+          height: isMobile ? (isControlPanelOpen ? '250px' : '0') : '100%',
+          overflowY: 'auto',
+          padding: isMobile ? (isControlPanelOpen ? '20px' : '0') : '20px',
+          boxSizing: 'border-box',
+          backgroundColor: '#f0f0f0',
+          borderLeft: isMobile ? 'none' : '1px solid #ccc',
+          borderTop: isMobile ? '1px solid #ccc' : 'none',
+          transition: 'height 0.3s ease-in-out, padding 0.3s ease-in-out',
+        }}
+      >
+        {(!isMobile || isControlPanelOpen) && (
+          <>
+            <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#333' }}>Control Panel</h3>
+            
+            <ControlItem
+              icon={<FaLayerGroup />}
+              label="Stack Length"
+              value={stackLength}
+              min={0.20}
+              max={3}
+              step={0.01}
+              onChange={(value) => {
+                setStackLength(value);
                 updateFrameStack();
               }}
-              style={{ marginRight: '10px' }}
             />
-            <FaExchangeAlt style={{ marginRight: '10px' }} />
-            Invert Frame Order
-          </label>
-        </div>
+
+            <ControlItem
+              icon={<FaImages />}
+              label="Frames to Show"
+              value={framePercentage}
+              min={1}
+              max={100}
+              step={0.1}
+              onChange={(value) => {
+                setFramePercentage(value);
+                updateFrameStack();
+              }}
+              unit="%"
+            />
+
+            <ControlItem
+              icon={<FaEye />}
+              label="Opacity"
+              value={opacity}
+              min={0}
+              max={1}
+              step={0.001}
+              onChange={setOpacity}
+              customScale={{
+                toSlider: (value) => value <= 0.1 ? value * 5 : 0.5 + (value - 0.1) * (0.5 / 0.9),
+                fromSlider: (value) => value <= 0.5 ? value / 5 : 0.1 + (value - 0.5) * (0.9 / 0.5)
+              }}
+            />
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isBlackAndWhite}
+                  onChange={() => setIsBlackAndWhite(!isBlackAndWhite)}
+                  style={{ marginRight: '10px' }}
+                />
+                <FaAdjust style={{ marginRight: '10px' }} />
+                Black & White
+              </label>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isInverted}
+                  onChange={() => setIsInverted(!isInverted)}
+                  style={{ marginRight: '10px' }}
+                />
+                <FaAdjust style={{ marginRight: '10px' }} />
+                Invert Colors
+              </label>
+            </div>
+
+            <ControlItem
+              icon={<FaAdjust />}
+              label="Contrast"
+              value={contrast}
+              min={0}
+              max={1}
+              step={0.001}
+              onChange={setContrast}
+              customScale={{
+                toSlider: (value) => value <= 1 ? value * 0.5 : 0.5 + (value - 1) * 0.125,
+                fromSlider: (value) => value <= 0.5 ? value * 2 : 1 + (value - 0.5) * 8
+              }}
+            />
+
+            <ControlItem
+              icon={<FaSun />}
+              label="Brightness"
+              value={brightness}
+              min={0}
+              max={100}
+              step={0.1}
+              onChange={(value) => {
+                setBrightness(value);
+                updateFrameStack();
+              }}
+            />
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center' }}>
+                <FaPalette style={{ marginRight: '10px' }} />
+                Blending Mode:
+              </label>
+              <select 
+                value={blendMode} 
+                onChange={(e) => setBlendMode(e.target.value)}
+                style={{
+                  width: '100%',
+                  marginTop: '5px',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="Normal">Normal</option>
+                <option value="Additive">Additive</option>
+                <option value="Screen">Screen</option>
+                <option value="Overlay">Overlay</option>
+              </select>
+            </div>
+            
+            <ControlItem
+              label="Slice Start"
+              value={sliceStart}
+              min={0}
+              max={sliceEnd - 1}
+              onChange={handleSliceStartChange}
+              unit="%"
+            />
+            
+            <ControlItem
+              label="Slice End"
+              value={sliceEnd}
+              min={sliceStart + 1}
+              max={100}
+              onChange={handleSliceEndChange}
+              unit="%"
+            />
+
+            <ControlItem
+              label="Slice Position"
+              value={sliceStart}
+              min={0}
+              max={100 - sliceWidth}
+              onChange={handleSlicePositionChange}
+              unit="%"
+            />
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isFrameOrderInverted}
+                  onChange={() => {
+                    setIsFrameOrderInverted(!isFrameOrderInverted);
+                    updateFrameStack();
+                  }}
+                  style={{ marginRight: '10px' }}
+                />
+                <FaExchangeAlt style={{ marginRight: '10px' }} />
+                Invert Frame Order
+              </label>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

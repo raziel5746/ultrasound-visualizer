@@ -9,7 +9,6 @@ function App() {
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      console.log('File selected:', file.name, 'Type:', file.type, 'Size:', file.size);
       setVideoUrl(URL.createObjectURL(file));
     }
   };
