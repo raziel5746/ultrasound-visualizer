@@ -129,10 +129,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     const mount = mountRef.current;
 
     sceneRef.current = new THREE.Scene();
-    // Keep the reduced FOV for a zoomed-in view
     cameraRef.current = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 0.1, 1000);
     
-    // Use WebGL2 if available, fall back to WebGL1
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('webgl2', { antialias: true }) || 
                     canvas.getContext('webgl', { antialias: true });
@@ -145,22 +143,21 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     });
     rendererRef.current.setSize(canvasWidth, canvasHeight);
     rendererRef.current.setPixelRatio(window.devicePixelRatio);
+    
     mount.appendChild(rendererRef.current.domElement);
 
     controlsRef.current = new OrbitControls(cameraRef.current, rendererRef.current.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Simplify lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
     sceneRef.current.add(ambientLight);
-    const pointLight = new THREE.PointLight(0xffffff, 0.5);
-    pointLight.position.set(5, 5, 5);
-    sceneRef.current.add(pointLight);
-
+    
     // Adjust initial camera position with a distance of 5
     const distance = 5;
     const angle = -Math.PI / 4;
     cameraRef.current.position.set(
       Math.cos(angle) * distance,
-      1.25, // Slightly increased the height
+      1.25,
       Math.sin(angle) * distance
     );
     cameraRef.current.lookAt(0, 0, 0);
