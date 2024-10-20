@@ -6,7 +6,6 @@ import { FaAdjust, FaSun, FaLayerGroup, FaImages, FaEye, FaPalette, FaExchangeAl
 const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   const mountRef = useRef(null);
   const videoRef = useRef(null);
-  const [frames, setFrames] = useState([]);
   const [stackLength, setStackLength] = useState(1.5); // Default to middle of the new range
   const [framePercentage, setFramePercentage] = useState(50);
   const [canvasHeight, setCanvasHeight] = useState(0);
@@ -42,35 +41,176 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   // Add this new state variable near the top of your component
   const [renderedFrames, setRenderedFrames] = useState(0);
 
+  // Update these state variables
   const [sliceStart, setSliceStart] = useState(0);
   const [sliceEnd, setSliceEnd] = useState(100);
-  const [sliceWidth, setSliceWidth] = useState(100);
+  const [slicePosition, setSlicePosition] = useState(0);
 
   const [isFrameOrderInverted, setIsFrameOrderInverted] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(true);
 
+  const [textureAtlas, setTextureAtlas] = useState(null);
+
+  const planeGeometryRef = useRef(null);
+  const instancedMeshRef = useRef(null);
+
+  // Add a new state for atlas creation
+  const [isCreatingAtlas, setIsCreatingAtlas] = useState(false);
+
+  const dependenciesRef = useRef({
+    frameData: [],
+    stackLength: 1.5,
+    framePercentage: 50,
+    sliceStart: 0,
+    sliceEnd: 100,
+    isFrameOrderInverted: false,
+    textureAtlas: null,
+    textureMatrices: []
+  });
+
+  const [frameData, setFrameData] = useState([]);
+
+  const [textureMatrices, setTextureMatrices] = useState([]);
+
+  const updateFrameStack = useCallback(() => {
+    console.log('updateFrameStack called');
+
+    const {
+      frameData,
+      stackLength,
+      framePercentage,
+      sliceStart,
+      sliceEnd,
+      isFrameOrderInverted,
+      textureAtlas,
+      textureMatrices
+    } = dependenciesRef.current;
+
+    if (!sceneRef.current || !cameraRef.current || !controlsRef.current || !textureAtlas || frameData.length === 0 || !textureMatrices || textureMatrices.length === 0) {
+      console.log('updateFrameStack early return', {
+        scene: !!sceneRef.current,
+        camera: !!cameraRef.current,
+        controls: !!controlsRef.current,
+        textureAtlas: !!textureAtlas,
+        frameDataLength: frameData.length,
+        textureMatricesLength: textureMatrices ? textureMatrices.length : 0
+      });
+      return;
+    }
+
+    // Store current camera position and controls target
+    const currentCameraPosition = cameraRef.current.position.clone();
+    const currentCameraRotation = cameraRef.current.rotation.clone();
+    const currentControlsTarget = controlsRef.current.target.clone();
+
+    const totalFrames = frameData.length;
+    const framesToShow = Math.max(2, Math.min(totalFrames, Math.floor(totalFrames * (framePercentage / 100))));
+    
+    const startFrame = Math.floor(sliceStart * totalFrames / 100);
+    const endFrame = Math.ceil(sliceEnd * totalFrames / 100);
+    
+    const visibleFrames = endFrame - startFrame;
+    
+    setRenderedFrames(visibleFrames);
+
+    const actualFrameDistance = stackLength / (visibleFrames - 1);
+
+    const stackCenter = new THREE.Vector3(0, 0, 0);
+    stackCenterRef.current = stackCenter;
+
+    if (!instancedMeshRef.current) {
+      console.log('Creating new instanced mesh');
+      planeGeometryRef.current = new THREE.PlaneGeometry(1.6, 1);
+      const instancedMaterial = shaderMaterialRef.current.clone();
+      instancedMeshRef.current = new THREE.InstancedMesh(planeGeometryRef.current, instancedMaterial, visibleFrames);
+      sceneRef.current.add(instancedMeshRef.current);
+    }
+
+    instancedMeshRef.current.count = visibleFrames;
+
+    const tempObject = new THREE.Object3D();
+    const frameIndexAttribute = new THREE.InstancedBufferAttribute(new Float32Array(visibleFrames), 1);
+
+    for (let i = 0; i < visibleFrames; i++) {
+      const frameIndex = isFrameOrderInverted 
+        ? startFrame + i
+        : totalFrames - 1 - (startFrame + i);
+
+      const zPosition = i * actualFrameDistance - stackLength / 2;
+      tempObject.position.set(0, 0, zPosition);
+      tempObject.updateMatrix();
+      instancedMeshRef.current.setMatrixAt(i, tempObject.matrix);
+
+      frameIndexAttribute.setX(i, frameIndex);
+    }
+
+    instancedMeshRef.current.instanceMatrix.needsUpdate = true;
+    instancedMeshRef.current.geometry.setAttribute('frameIndex', frameIndexAttribute);
+
+    // Update the texture matrices in the shader
+    if (shaderMaterialRef.current && shaderMaterialRef.current.uniforms) {
+      const flattenedMatrices = textureMatrices.flatMap(matrix => matrix.toArray());
+      shaderMaterialRef.current.uniforms.uTextureMatrix.value = flattenedMatrices;
+      shaderMaterialRef.current.uniforms.uNumFrames.value = frameData.length;
+    }
+
+    // Restore camera position and controls target
+    cameraRef.current.position.copy(currentCameraPosition);
+    cameraRef.current.rotation.copy(currentCameraRotation);
+    controlsRef.current.target.copy(currentControlsTarget);
+
+    controlsRef.current.update();
+
+    if (instancedMeshRef.current) {
+      const box = new THREE.Box3().setFromObject(instancedMeshRef.current);
+      console.log('Stack bounding box:', box);
+      console.log('Stack center:', box.getCenter(new THREE.Vector3()));
+    }
+
+    console.log('updateFrameStack completed', {
+      framesToShow,
+      startFrame,
+      endFrame,
+      stackCenter: stackCenterRef.current,
+      cameraPosition: cameraRef.current.position,
+      cameraRotation: cameraRef.current.rotation,
+      controlsTarget: controlsRef.current.target
+    });
+  }, [/* dependencies */]);
+
+  // Update dependency ref when values change
+  useEffect(() => {
+    dependenciesRef.current = {
+      frameData,
+      stackLength,
+      framePercentage,
+      sliceStart,
+      sliceEnd,
+      isFrameOrderInverted,
+      textureAtlas,
+      textureMatrices
+    };
+  }, [frameData, stackLength, framePercentage, sliceStart, sliceEnd, isFrameOrderInverted, textureAtlas, textureMatrices]);
+
   const handleSliceStartChange = (value) => {
     const newStart = Math.max(0, Math.min(value, sliceEnd - 1));
-    const newWidth = sliceEnd - newStart;
     setSliceStart(newStart);
-    setSliceWidth(newWidth);
     updateFrameStack();
   };
 
   const handleSliceEndChange = (value) => {
     const newEnd = Math.min(100, Math.max(value, sliceStart + 1));
-    const newWidth = newEnd - sliceStart;
     setSliceEnd(newEnd);
-    setSliceWidth(newWidth);
     updateFrameStack();
   };
 
   const handleSlicePositionChange = (value) => {
-    const newStart = Math.max(0, Math.min(value, 100 - sliceWidth));
-    setSliceStart(newStart);
-    setSliceEnd(newStart + sliceWidth);
+    const newPosition = Math.max(0, Math.min(value, 100 - (sliceEnd - sliceStart)));
+    setSlicePosition(newPosition);
+    setSliceStart(newPosition);
+    setSliceEnd(newPosition + (sliceEnd - sliceStart));
     updateFrameStack();
   };
 
@@ -139,7 +279,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
       canvas: canvas,
       context: context,
       antialias: true,
-      alpha: true
+      alpha: true,
+      sortObjects: true // Enable object sorting
     });
     rendererRef.current.setSize(canvasWidth, canvasHeight);
     rendererRef.current.setPixelRatio(window.devicePixelRatio);
@@ -152,16 +293,16 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     const ambientLight = new THREE.AmbientLight(0xffffff, 1);
     sceneRef.current.add(ambientLight);
     
-    // Adjust initial camera position with a distance of 5
-    const distance = 5;
-    const angle = -Math.PI / 4;
+    // Adjust initial camera position
+    const distance = 3; // Reduced from 5
+    const angle = -Math.PI / 6; // Changed from -Math.PI / 4
     cameraRef.current.position.set(
       Math.cos(angle) * distance,
-      1.25,
+      1,
       Math.sin(angle) * distance
     );
-    cameraRef.current.lookAt(0, 0, 0);
-    controlsRef.current.target.set(0, 0, 0);
+    cameraRef.current.lookAt(0, 0.5, 0); // Changed from (0, 0, 0)
+    controlsRef.current.target.set(0, 0.5, 0); // Changed from (0, 0, 0)
     controlsRef.current.update();
 
     const animate = () => {
@@ -178,143 +319,260 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     };
   }, [canvasWidth, canvasHeight]);
 
-  const updateFrameStack = useCallback(() => {
-    if (!sceneRef.current || !cameraRef.current || !controlsRef.current || frames.length === 0) {
+  const createTextureAtlas = useCallback((frames) => {
+    if (frames.length === 0) {
+      console.error('No frames to create texture atlas');
       return;
     }
 
-    cameraPositionRef.current.copy(cameraRef.current.position);
-    cameraRotationRef.current.copy(cameraRef.current.rotation);
-    controlsTargetRef.current.copy(controlsRef.current.target);
+    setIsCreatingAtlas(true);
 
-    sceneRef.current.children = sceneRef.current.children.filter(child => !(child instanceof THREE.Mesh));
+    const frameWidth = frames[0].canvas.width;
+    const frameHeight = frames[0].canvas.height;
 
-    const framesToShow = Math.max(2, Math.floor(frames.length * (framePercentage / 100)));
-    setRenderedFrames(framesToShow);
-    const actualFrameDistance = stackLength / (framesToShow - 1);
-    const step = (frames.length - 1) / (framesToShow - 1);
+    // Calculate the optimal atlas size
+    const totalPixels = frames.length * frameWidth * frameHeight;
+    const atlasSize = Math.ceil(Math.sqrt(totalPixels));
+    const framesPerRow = Math.floor(atlasSize / frameWidth);
+    const framesPerColumn = Math.ceil(frames.length / framesPerRow);
 
-    // Calculate start and end indices based on slice values and position
-    const startIndex = Math.floor(sliceStart / 100 * framesToShow);
-    const endIndex = Math.ceil(sliceEnd / 100 * framesToShow);
+    const atlasWidth = framesPerRow * frameWidth;
+    const atlasHeight = framesPerColumn * frameHeight;
 
-    // Calculate the total stack length
-    const totalStackLength = actualFrameDistance * (framesToShow - 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = atlasWidth;
+    canvas.height = atlasHeight;
+    const ctx = canvas.getContext('2d');
 
-    // Calculate the offset to keep the end of the stack fixed
-    const offsetZ = (framesToShow - endIndex) * actualFrameDistance;
+    frames.forEach((frame, index) => {
+      const row = Math.floor(index / framesPerRow);
+      const col = index % framesPerRow;
+      const x = col * frameWidth;
+      const y = (framesPerColumn - 1 - row) * frameHeight; // Invert the row order
 
-    // Adjust the stack center based on the new slice, keeping the end fixed
-    const stackCenter = new THREE.Vector3(0, 0.5, totalStackLength / 2 - offsetZ);
-    stackCenterRef.current = stackCenter;
+      ctx.drawImage(frame.canvas, x, y);
 
-    // Update OrbitControls target
-    controlsRef.current.target.copy(stackCenter);
+      frame.textureCoords = {
+        u: x / atlasWidth,
+        v: y / atlasHeight,
+        width: frameWidth / atlasWidth,
+        height: frameHeight / atlasHeight,
+      };
+    });
 
-    // Update shader material
-    if (!shaderMaterialRef.current) {
-      shaderMaterialRef.current = new THREE.ShaderMaterial({
-        uniforms: {
-          uTexture: { value: null },
-          uContrast: { value: contrast },
-          uBrightness: { value: brightness / 50 - 1 }, // Map 0-100 to -1 to 1
-          uIsBlackAndWhite: { value: isBlackAndWhite },
-          uIsInverted: { value: isInverted },
-          uOpacity: { value: opacity },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform sampler2D uTexture;
-          uniform float uContrast;
-          uniform float uBrightness;
-          uniform bool uIsBlackAndWhite;
-          uniform bool uIsInverted;
-          uniform float uOpacity;
-          varying vec2 vUv;
-          void main() {
-            vec4 texColor = texture2D(uTexture, vUv);
-            
-            // Apply contrast
-            vec3 color = (texColor.rgb - 0.5) * uContrast + 0.5;
-            
-            // Apply brightness
-            color += uBrightness;
-            
-            // Apply black and white
-            if (uIsBlackAndWhite) {
-              float gray = dot(color, vec3(0.299, 0.587, 0.114));
-              color = vec3(gray);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    const textureMatrices = frames.map(frame => {
+      const matrix = new THREE.Matrix3();
+      matrix.setUvTransform(
+        frame.textureCoords.u,
+        frame.textureCoords.v,
+        frame.textureCoords.width,
+        frame.textureCoords.height,
+        0,
+        0,
+        0
+      );
+      return matrix;
+    });
+
+    setTextureAtlas(texture);
+    setFrameData(frames);
+    setTextureMatrices(textureMatrices);
+    setIsCreatingAtlas(false);
+    console.log('Texture atlas created', { atlasWidth, atlasHeight, framesCount: frames.length });
+  }, []);
+
+  const extractFrames = useCallback((video) => {
+    return new Promise((resolve, reject) => {
+      const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
+      const maxFrames = 500;
+      const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
+      
+      const newFrameData = [];
+
+      const extractFrame = (currentFrame) => {
+        return new Promise((resolveFrame) => {
+          video.currentTime = (currentFrame * frameStep) / 30;
+          video.onseeked = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Check if the frame is not empty (you may need to adjust this check)
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const isNotEmpty = imageData.data.some(channel => channel !== 0);
+
+            if (isNotEmpty) {
+              resolveFrame({
+                index: currentFrame,
+                canvas: canvas,
+                timestamp: video.currentTime
+              });
+            } else {
+              resolveFrame(null);
             }
-            
-            // Apply invert
-            if (uIsInverted) {
-              color = 1.0 - color;
-            }
-            
-            gl_FragColor = vec4(color, uOpacity);
+          };
+        });
+      };
+
+      const extractAllFrames = async () => {
+        for (let i = 0; i < totalFrameCount; i += frameStep) {
+          const frameInfo = await extractFrame(i);
+          if (frameInfo) {
+            newFrameData.push(frameInfo);
+            setExtractionProgress((newFrameData.length) / maxFrames);
           }
-        `,
-        transparent: true,
-        blending: THREE.NormalBlending,
-        side: THREE.DoubleSide, // Add this line to render both sides
-      });
-    }
+          if (newFrameData.length >= maxFrames) break;
+        }
+        setTotalFrames(newFrameData.length);
+        setFrameData(newFrameData);
+        createTextureAtlas(newFrameData);
+        updateFrameStack();
+        resolve(newFrameData);
+      };
 
-    for (let i = startIndex; i < endIndex; i++) {
-      // Modify this line to handle inverted frame order
-      const frameIndex = isFrameOrderInverted
-        ? Math.max(0, frames.length - 1 - Math.floor(i * step))
-        : Math.min(Math.floor(i * step), frames.length - 1);
-      const frameTexture = frames[frameIndex];
+      extractAllFrames().catch(reject);
+    });
+  }, [createTextureAtlas, updateFrameStack]);
 
-      const planeGeometry = new THREE.PlaneGeometry(1.6, 1);
-      const planeMaterial = shaderMaterialRef.current.clone();
-      planeMaterial.uniforms.uTexture.value = frameTexture;
-      planeMaterial.side = THREE.DoubleSide;
+  // Update shader material
+  useEffect(() => {
+    if (!textureAtlas || frameData.length === 0 || textureMatrices.length === 0) return;
 
-      // Set blending mode based on the selected option
-      switch (blendMode) {
+    const getBlendingMode = (mode) => {
+      switch (mode) {
+        case 'Normal':
+          return THREE.NormalBlending;
         case 'Additive':
-          planeMaterial.blending = THREE.AdditiveBlending;
-          break;
-        case 'Screen':
-          planeMaterial.blending = THREE.CustomBlending;
-          planeMaterial.blendSrc = THREE.OneFactor;
-          planeMaterial.blendDst = THREE.OneMinusSrcColorFactor;
-          break;
-        case 'Overlay':
-          planeMaterial.blending = THREE.CustomBlending;
-          planeMaterial.blendSrc = THREE.OneFactor;
-          planeMaterial.blendDst = THREE.OneMinusSrcAlphaFactor;
-          break;
-        default: // Normal
-          planeMaterial.blending = THREE.NormalBlending;
+          return THREE.AdditiveBlending;
+        case 'Custom':
+          return THREE.CustomBlending;
+        default:
+          return THREE.NormalBlending;
       }
+    };
 
-      const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
-      // Position the plane relative to the stack center, keeping the end fixed
-      planeMesh.position.set(0, stackCenter.y, i * actualFrameDistance - offsetZ - stackCenter.z);
-      sceneRef.current.add(planeMesh);
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTexture: { value: textureAtlas },
+        uTextureMatrix: { value: textureMatrices.flatMap(matrix => matrix.toArray()) },
+        uContrast: { value: contrast },
+        uBrightness: { value: brightness / 50 - 1 },
+        uIsBlackAndWhite: { value: isBlackAndWhite },
+        uIsInverted: { value: isInverted },
+        uOpacity: { value: opacity },
+        uNumFrames: { value: frameData.length },
+      },
+      vertexShader: `
+        #define MAX_FRAMES 500 // Adjust this value based on your maximum expected frames
+        uniform mat3 uTextureMatrix[MAX_FRAMES];
+        uniform int uNumFrames;
+        attribute float frameIndex;
+        varying vec2 vUv;
+        void main() {
+          int index = int(frameIndex);
+          if (index < uNumFrames) {
+            vUv = (uTextureMatrix[index] * vec3(uv, 1.0)).xy;
+          } else {
+            vUv = uv;
+          }
+          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uTexture;
+        uniform float uContrast;
+        uniform float uBrightness;
+        uniform bool uIsBlackAndWhite;
+        uniform bool uIsInverted;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        void main() {
+          vec4 texColor = texture2D(uTexture, vUv);
+          
+          vec3 color = (texColor.rgb - 0.5) * uContrast + 0.5;
+          color += uBrightness;
+          
+          if (uIsBlackAndWhite) {
+            float gray = dot(color, vec3(0.299, 0.587, 0.114));
+            color = vec3(gray);
+          }
+          
+          if (uIsInverted) {
+            color = 1.0 - color;
+          }
+          
+          float alpha = max(texColor.a * uOpacity, 0.01);
+          
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: getBlendingMode(blendMode),
+      side: THREE.DoubleSide,
+    });
+
+    shaderMaterialRef.current = material;
+
+    if (instancedMeshRef.current) {
+      instancedMeshRef.current.material = material;
+      console.log('Updated instanced mesh material');
     }
 
-    cameraRef.current.position.copy(cameraPositionRef.current);
-    cameraRef.current.rotation.copy(cameraRotationRef.current);
-    controlsRef.current.target.copy(controlsTargetRef.current);
+  }, [textureAtlas, contrast, brightness, isBlackAndWhite, isInverted, opacity, blendMode, frameData.length, textureMatrices]);
+
+  const resetCamera = useCallback(() => {
+    if (!cameraRef.current || !controlsRef.current || !stackCenterRef.current) return;
+
+    const center = stackCenterRef.current;
+
+    if (cameraPositionRef.current.lengthSq() > 0) {
+      cameraRef.current.position.copy(cameraPositionRef.current);
+      cameraRef.current.rotation.copy(cameraRotationRef.current);
+      controlsRef.current.target.copy(controlsTargetRef.current);
+    } else {
+      const distance = 3;
+      const angle = -Math.PI / 6;
+      cameraRef.current.position.set(
+        center.x + Math.cos(angle) * distance,
+        center.y + 1,
+        center.z + Math.sin(angle) * distance
+      );
+      cameraRef.current.lookAt(center);
+      controlsRef.current.target.copy(center);
+    }
 
     controlsRef.current.update();
-  }, [frames, stackLength, framePercentage, blendMode, opacity, contrast, brightness, isBlackAndWhite, isInverted, sliceStart, sliceEnd, isFrameOrderInverted]);
+    updateFrameStack(); // This is now okay
+  }, [updateFrameStack]);
 
   useEffect(() => {
-    if (sceneRef.current && frames.length > 0) {
+    console.log('Texture atlas or related values changed');
+    if (sceneRef.current && textureAtlas) {
+      console.log('Calling updateFrameStack');
       updateFrameStack();
     }
-  }, [frames, updateFrameStack]);
+  }, [textureAtlas, updateFrameStack, stackLength, framePercentage, sliceStart, sliceEnd, isFrameOrderInverted]);
+
+  const isStackVisible = useCallback(() => {
+    if (!instancedMeshRef.current || !cameraRef.current) return false;
+
+    const frustum = new THREE.Frustum();
+    const matrix = new THREE.Matrix4().multiplyMatrices(
+      cameraRef.current.projectionMatrix,
+      cameraRef.current.matrixWorldInverse
+    );
+    frustum.setFromProjectionMatrix(matrix);
+
+    const box = new THREE.Box3().setFromObject(instancedMeshRef.current);
+    return frustum.intersectsBox(box);
+  }, []);
 
   useEffect(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !controlsRef.current) {
@@ -324,6 +582,19 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     const animate = () => {
       requestAnimationFrame(animate);
       controlsRef.current.update();
+      
+      if (instancedMeshRef.current && !sceneRef.current.children.includes(instancedMeshRef.current)) {
+        console.error('Instanced mesh is not in the scene');
+      }
+      
+      if (instancedMeshRef.current && !isStackVisible()) {
+        console.warn('Stack is not visible in camera view');
+        console.log('Camera position:', cameraRef.current.position);
+        console.log('Camera rotation:', cameraRef.current.rotation);
+        console.log('Controls target:', controlsRef.current.target);
+        console.log('Stack center:', stackCenterRef.current);
+      }
+      
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     };
 
@@ -340,46 +611,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [canvasWidth, canvasHeight]);
-
-  const extractFrames = useCallback((video) => {
-    return new Promise((resolve, reject) => {
-      const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
-      const maxFrames = 500;
-      const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
-      const frameCount = Math.min(maxFrames, totalFrameCount);
-      
-      setTotalFrames(frameCount);
-      const extractedFrames = [];
-
-      const extractFrame = (currentFrame) => {
-        return new Promise((resolveFrame) => {
-          video.currentTime = (currentFrame * frameStep) / 30;
-          video.onseeked = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const frameTexture = new THREE.CanvasTexture(canvas);
-            frameTexture.needsUpdate = true;
-            resolveFrame(frameTexture);
-          };
-        });
-      };
-
-      const extractAllFrames = async () => {
-        for (let i = 0; i < frameCount; i++) {
-          const frameTexture = await extractFrame(i);
-          extractedFrames.push(frameTexture);
-          setExtractionProgress((i + 1) / frameCount);
-        }
-        resolve(extractedFrames);
-      };
-
-      extractAllFrames().catch(reject);
-    });
-  }, []);
+  }, [canvasWidth, canvasHeight, isStackVisible]);
 
   useEffect(() => {
     if (!videoUrl) {
@@ -400,8 +632,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
       try {
         await video.play();
         video.pause();
-        const extractedFrames = await extractFrames(video);
-        setFrames(extractedFrames);
+        await extractFrames(video);
         setIsLocalLoading(false);
       } catch (error) {
         setError(`Error extracting frames: ${error.message}`);
@@ -467,17 +698,54 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     };
   }, [videoUrl, setError, extractFrames]);
 
-  // Add this new useEffect
   useEffect(() => {
-    if (sceneRef.current && frames.length > 0) {
-      updateFrameStack();
+    if (shaderMaterialRef.current) {
+      sceneRef.current.children.forEach(child => {
+        if (child instanceof THREE.Mesh) {
+          child.material.uniforms.uContrast.value = contrast;
+          child.material.uniforms.uBrightness.value = brightness / 50 - 1;
+          child.material.uniforms.uOpacity.value = opacity;
+          child.material.uniforms.uIsBlackAndWhite.value = isBlackAndWhite;
+          child.material.uniforms.uIsInverted.value = isInverted;
+        }
+      });
     }
-  }, [isBlackAndWhite, isInverted, contrast, opacity, blendMode, stackLength, framePercentage, frames.length, updateFrameStack]);
+  }, [contrast, brightness, opacity, isBlackAndWhite, isInverted]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    const axesHelper = new THREE.AxesHelper(2);
+    sceneRef.current.add(axesHelper);
+
+    return () => {
+      sceneRef.current.remove(axesHelper);
+    };
+  }, []);
+
+  const storeCameraPosition = useCallback(() => {
+    if (cameraRef.current && controlsRef.current) {
+      cameraPositionRef.current.copy(cameraRef.current.position);
+      cameraRotationRef.current.copy(cameraRef.current.rotation);
+      controlsTargetRef.current.copy(controlsRef.current.target);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!controlsRef.current) return;
+
+    const controls = controlsRef.current;
+    controls.addEventListener('change', storeCameraPosition);
+
+    return () => {
+      controls.removeEventListener('change', storeCameraPosition);
+    };
+  }, [storeCameraPosition]);
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100%', overflow: 'hidden' }}>
       <div ref={mountRef} style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px`, position: 'relative' }}>
-        {isLocalLoading && (
+        {(isLocalLoading || isCreatingAtlas) && (
           <div style={{
             position: 'absolute',
             top: 0,
@@ -493,7 +761,9 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
             fontSize: '24px',
             zIndex: 1000
           }}>
-            <div style={{ marginBottom: '20px' }}>Extracting Frames</div>
+            <div style={{ marginBottom: '20px' }}>
+              {isLocalLoading ? 'Extracting Frames' : 'Creating Texture Atlas'}
+            </div>
             <div style={{ 
               width: '80%', 
               height: '40px', 
@@ -502,15 +772,16 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
               overflow: 'hidden'
             }}>
               <div style={{
-                width: `${extractionProgress * 100}%`,
+                width: `${isLocalLoading ? extractionProgress * 100 : 100}%`,
                 height: '100%',
                 backgroundColor: '#3498db',
-                // Remove the transition property
               }} />
             </div>
-            <div style={{ marginTop: '10px' }}>
-              {Math.round(extractionProgress * 100)}% ({Math.round(extractionProgress * totalFrames)} / {totalFrames} frames)
-            </div>
+            {isLocalLoading && (
+              <div style={{ marginTop: '10px' }}>
+                {Math.round(extractionProgress * 100)}% ({Math.round(extractionProgress * totalFrames)} / {totalFrames} frames)
+              </div>
+            )}
           </div>
         )}
         
@@ -673,7 +944,9 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
               </label>
               <select 
                 value={blendMode} 
-                onChange={(e) => setBlendMode(e.target.value)}
+                onChange={(e) => {
+                  setBlendMode(e.target.value);
+                }}
                 style={{
                   width: '100%',
                   marginTop: '5px',
@@ -685,8 +958,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
               >
                 <option value="Normal">Normal</option>
                 <option value="Additive">Additive</option>
-                <option value="Screen">Screen</option>
-                <option value="Overlay">Overlay</option>
+                <option value="Custom">Custom</option>
               </select>
             </div>
             
@@ -710,9 +982,9 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
 
             <ControlItem
               label="Slice Position"
-              value={sliceStart}
+              value={slicePosition}
               min={0}
-              max={100 - sliceWidth}
+              max={100 - (sliceEnd - sliceStart)}
               onChange={handleSlicePositionChange}
               unit="%"
             />
@@ -732,6 +1004,19 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
                 Invert Frame Order
               </label>
             </div>
+
+            <button onClick={resetCamera} style={{
+              width: '100%',
+              padding: '10px',
+              marginBottom: '15px',
+              backgroundColor: '#3498db',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}>
+              Reset Camera
+            </button>
           </>
         )}
       </div>
