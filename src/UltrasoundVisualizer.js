@@ -2,12 +2,13 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as BABYLON from '@babylonjs/core';
 import SceneManager from './scene/SceneManager';
 import ControlPanel from './components/ControlPanel';
-import { FaImages, FaCog } from 'react-icons/fa';
+import { FaImages, FaCog, FaUndoAlt, FaExchangeAlt, FaAdjust } from 'react-icons/fa';
+import TextureAtlas from './utils/TextureAtlas';
+import ColorPalette from './components/ColorPalette';
 
 const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   const canvasRef = useRef(null);
   const sceneManagerRef = useRef(null);
-  const [frames, setFrames] = useState([]);
   const [isLocalLoading, setIsLocalLoading] = useState(true);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [totalFrames, setTotalFrames] = useState(0);
@@ -15,14 +16,16 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   const [isMobile, setIsMobile] = useState(false);
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(true);
   const [sliceRange, setSliceRange] = useState([0, 100]);
+  const [textureAtlas, setTextureAtlas] = useState(null);
+  const [globalLightIntensity, setGlobalLightIntensity] = useState(1);
 
   // Wrap defaultValues in useMemo
   const defaultValues = useMemo(() => ({
     stackLength: 1.5,
     framePercentage: 50,
     opacity: 0.3, // Changed from 1 to 0.3
-    contrast: 1,
     brightness: 1,
+    depthIntensity: 0.5,
     blendMode: BABYLON.Constants.ALPHA_COMBINE,
     sliceRange: [0, 100],
     isFrameOrderInverted: false,
@@ -32,8 +35,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   const [stackLength, setStackLength] = useState(defaultValues.stackLength);
   const [framePercentage, setFramePercentage] = useState(defaultValues.framePercentage);
   const [opacity, setOpacity] = useState(defaultValues.opacity);
-  const [contrast, setContrast] = useState(defaultValues.contrast);
   const [brightness, setBrightness] = useState(defaultValues.brightness);
+  const [depthIntensity, setDepthIntensity] = useState(defaultValues.depthIntensity);
   const [blendMode, setBlendMode] = useState(defaultValues.blendMode);
   const [isFrameOrderInverted, setIsFrameOrderInverted] = useState(defaultValues.isFrameOrderInverted);
   const [backgroundColor, setBackgroundColor] = useState(defaultValues.backgroundColor);
@@ -57,6 +60,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     }
   }, [backgroundColor]);
 
+  useEffect(() => {
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.setGlobalLightIntensity(globalLightIntensity);
+    }
+  }, [globalLightIntensity]);
+
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
       const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
@@ -65,7 +74,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
       const frameCount = Math.min(maxFrames, totalFrameCount);
       
       setTotalFrames(frameCount);
-      const extractedFrames = [];
 
       const extractFrame = (currentFrame) => {
         return new Promise((resolveFrame) => {
@@ -74,27 +82,29 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Create a dynamic texture from the canvas
-            const frameTexture = new BABYLON.DynamicTexture("frameTexture", {width: canvas.width, height: canvas.height}, sceneManagerRef.current.getScene());
-            const context2D = frameTexture.getContext();
-            context2D.drawImage(canvas, 0, 0, canvas.width, canvas.height);
-            frameTexture.update();
-            
-            resolveFrame(frameTexture);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            resolveFrame(canvas);
           };
         });
       };
 
       const extractAllFrames = async () => {
+        const frameCanvases = [];
         for (let i = 0; i < frameCount; i++) {
-          const frameTexture = await extractFrame(i);
-          extractedFrames.push(frameTexture);
+          const frameCanvas = await extractFrame(i);
+          frameCanvases.push(frameCanvas);
           setExtractionProgress((i + 1) / frameCount);
         }
-        resolve(extractedFrames);
+
+        try {
+          const atlas = new TextureAtlas(sceneManagerRef.current.getScene());
+          await atlas.createAtlas(frameCanvases);
+          setTextureAtlas(atlas);
+          resolve(frameCanvases.length);
+        } catch (error) {
+          reject(error);
+        }
       };
 
       extractAllFrames().catch(reject);
@@ -119,8 +129,10 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
       try {
         await video.play();
         video.pause();
-        const extractedFrames = await extractFrames(video);
-        setFrames(extractedFrames);
+        const frameCount = await extractFrames(video);
+        // Instead of setting frames, we're now setting the texture atlas
+        // setFrames(extractedFrames);
+        setTotalFrames(frameCount);
         setIsLocalLoading(false);
       } catch (error) {
         setError(`Error extracting frames: ${error.message}`);
@@ -159,18 +171,28 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     setStackLength(defaultValues.stackLength);
     setFramePercentage(defaultValues.framePercentage);
     setOpacity(defaultValues.opacity);
-    setContrast(defaultValues.contrast);
     setBrightness(defaultValues.brightness);
+    setDepthIntensity(defaultValues.depthIntensity);
     setBlendMode(defaultValues.blendMode);
     setSliceRange(defaultValues.sliceRange);
     setIsFrameOrderInverted(defaultValues.isFrameOrderInverted);
     setBackgroundColor(defaultValues.backgroundColor);
-  }, [defaultValues]);
+    setGlobalLightIntensity(1); // Add this line to reset global light intensity
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.updateCameraSettings({
+        inertia: 0.5,
+        angularSensibilityX: 300,
+        angularSensibilityY: 300,
+        panningSensibility: 200,
+        wheelPrecision: 2
+      });
+    }
+  }, [defaultValues]); // Remove sceneManagerRef from the dependency array
 
   const updateFrameStack = useCallback(() => {
-    if (sceneManagerRef.current && frames.length > 0) {
+    if (sceneManagerRef.current && textureAtlas) {
       sceneManagerRef.current.clearFrameMeshes();
-      const framesToShow = Math.max(2, Math.floor(frames.length * (framePercentage / 100)));
+      const framesToShow = Math.max(2, Math.floor(textureAtlas.frames.length * (framePercentage / 100)));
       setRenderedFrames(framesToShow);
       
       const scale = 15;
@@ -184,25 +206,47 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
 
       for (let i = startIndex; i < endIndex; i++) {
         const frameIndex = isFrameOrderInverted
-          ? frames.length - 1 - Math.min(Math.floor(i * (frames.length - 1) / (framesToShow - 1)), frames.length - 1)
-          : Math.min(Math.floor(i * (frames.length - 1) / (framesToShow - 1)), frames.length - 1);
+          ? textureAtlas.frames.length - 1 - Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1)
+          : Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1);
         const position = new BABYLON.Vector3(0, 0, i * actualFrameDistance - offset);
-        sceneManagerRef.current.createFrameMesh(frames[frameIndex], position, scale, {
+        
+        const depthFactor = 1 - (i - startIndex) / (endIndex - startIndex);
+        
+        sceneManagerRef.current.createFrameMesh(textureAtlas.atlas, position, scale, {
           opacity,
-          contrast,
           brightness,
+          depthIntensity,
+          depthFactor,
           blendMode,
+          uv: textureAtlas.getFrameUV(frameIndex)
         });
       }
     }
   }, [
-    frames, stackLength, framePercentage, opacity, contrast, brightness, 
+    textureAtlas, stackLength, framePercentage, opacity, brightness, depthIntensity,
     blendMode, isFrameOrderInverted, sliceRange
   ]);
 
+  const throttledUpdateFrameStack = useMemo(() => {
+    let timeoutId = null;
+    return () => {
+      if (timeoutId === null) {
+        updateFrameStack();
+        timeoutId = setTimeout(() => {
+          timeoutId = null;
+        }, 100);
+      }
+    };
+  }, [updateFrameStack]);
+
   useEffect(() => {
-    updateFrameStack();
-  }, [frames, stackLength, framePercentage, updateFrameStack]);
+    throttledUpdateFrameStack();
+  }, [opacity, brightness, depthIntensity, throttledUpdateFrameStack]);
+
+  const handleImmediateUpdate = useCallback((setter) => (value) => {
+    setter(value);
+    throttledUpdateFrameStack();
+  }, [throttledUpdateFrameStack]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -221,10 +265,71 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     setSliceRange(newRange);
   }, []);
 
+  const backgroundColors = ['#000000', '#1a1a1a', '#333333', '#4d4d4d', '#666666'];
+
+  const resetCamera = useCallback(() => {
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.resetCamera();
+    }
+  }, []);
+
+  const toggleFrameOrderInversion = useCallback(() => {
+    setIsFrameOrderInverted(prev => !prev);
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+        {/* Background color selection */}
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          padding: '10px',
+          borderRadius: '5px',
+          zIndex: 1000,
+        }}>
+          <ColorPalette
+            colors={backgroundColors}
+            selectedColor={backgroundColor}
+            onColorSelect={setBackgroundColor}
+          />
+        </div>
+        {/* Top right controls */}
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '8px 12px',
+          borderRadius: '20px',
+          fontSize: '14px',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+        }}>
+          <FaImages style={{ marginRight: '8px' }} />
+          <span style={{ marginRight: '15px' }}>Frames: {renderedFrames}</span>
+          <FaUndoAlt 
+            style={{ marginRight: '15px', cursor: 'pointer' }} 
+            onClick={resetCamera}
+            title="Reset Camera"
+          />
+          <FaExchangeAlt 
+            style={{ marginRight: '15px', cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
+            onClick={toggleFrameOrderInversion}
+            title="Invert Frame Order"
+          />
+          <FaAdjust 
+            style={{ cursor: 'pointer', color: depthIntensity > 0 ? '#3498db' : 'white' }} 
+            onClick={() => setDepthIntensity(depthIntensity > 0 ? 0 : 0.5)}
+            title="Toggle Depth Intensity"
+          />
+        </div>
         {isLocalLoading && (
           <div style={{
             position: 'absolute',
@@ -260,23 +365,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
             </div>
           </div>
         )}
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '20px',
-          fontSize: '14px',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-        }}>
-          <FaImages style={{ marginRight: '8px' }} />
-          Frames: {renderedFrames}
-        </div>
       </div>
       {isMobile && (
         <div
@@ -307,21 +395,19 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
         setFramePercentage={setFramePercentage}
         opacity={opacity}
         setOpacity={setOpacity}
-        contrast={contrast}
-        setContrast={setContrast}
         brightness={brightness}
         setBrightness={setBrightness}
         blendMode={blendMode}
         setBlendMode={setBlendMode}
         sliceRange={sliceRange}
         setSliceRange={handleSliceRangeChange}
-        isFrameOrderInverted={isFrameOrderInverted}
-        setIsFrameOrderInverted={setIsFrameOrderInverted}
-        backgroundColor={backgroundColor}
-        setBackgroundColor={setBackgroundColor}
         isMobile={isMobile}
         isOpen={!isMobile || isControlPanelOpen}
         resetToDefaults={resetToDefaults}
+        onImmediateOpacityChange={handleImmediateUpdate(setOpacity)}
+        onImmediateBrightnessChange={handleImmediateUpdate(setBrightness)}
+        globalLightIntensity={globalLightIntensity}
+        setGlobalLightIntensity={setGlobalLightIntensity}
       />
     </div>
   );

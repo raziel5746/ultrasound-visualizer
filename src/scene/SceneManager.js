@@ -8,6 +8,7 @@ class SceneManager {
     this.engine = null;
     this.frameMeshes = [];
     this.light = null;
+    this.globalLight = null;
   }
 
   initialize() {
@@ -18,10 +19,30 @@ class SceneManager {
     this.camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 4, Math.PI / 3, 75, BABYLON.Vector3.Zero(), this.scene);
     this.camera.attachControl(this.canvas, true);
 
-    this.light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), this.scene);
+    // Configure camera inertia and sensitivity
+    this.camera.inertia = 0.5;
+    this.camera.angularSensibilityX = 300;
+    this.camera.angularSensibilityY = 300;
+    this.camera.panningSensibility = 200;
+    this.camera.wheelPrecision = 2;
+
+    // Optionally, set less restrictive limits if needed
+    this.camera.lowerBetaLimit = 0.01;
+    this.camera.upperBetaLimit = Math.PI - 0.01;
+
+    this.camera.lowerRadiusLimit = 10;
+    this.camera.upperRadiusLimit = 150;
+
+    // Replace the existing light with a HemisphericLight
+    this.globalLight = new BABYLON.HemisphericLight("globalLight", new BABYLON.Vector3(0, 1, 0), this.scene);
+    this.globalLight.intensity = 1; // Default intensity
 
     // Set initial background color
     this.scene.clearColor = BABYLON.Color3.FromHexString('#000000');
+
+    // Store initial camera position and target
+    this.initialCameraPosition = this.camera.position.clone();
+    this.initialCameraTarget = this.camera.target.clone();
 
     this.engine.runRenderLoop(() => {
       this.scene.render();
@@ -33,25 +54,54 @@ class SceneManager {
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
-    const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", { width: 1.6 * scale, height: 1 * scale }, this.scene);
+    const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", { 
+      width: 1.6 * scale, 
+      height: 1 * scale, 
+      sideOrientation: BABYLON.Mesh.DOUBLESIDE 
+    }, this.scene);
+    
     const material = new BABYLON.StandardMaterial("frameMaterial", this.scene);
     material.diffuseTexture = texture;
     material.backFaceCulling = false;
     
+    // Remove specular reflection
+    material.specularColor = new BABYLON.Color3(0, 0, 0);
+    
+    // Enable alpha
+    material.useAlphaFromDiffuseTexture = true;
+
     // Apply effects
     material.alpha = effects.opacity || 1;
-    material.diffuseColor = new BABYLON.Color3(effects.brightness || 1, effects.brightness || 1, effects.brightness || 1);
-    material.diffuseTexture.level = effects.contrast || 1;
+    
+    // Apply brightness and depth intensity
+    const depthEffect = 1 - (effects.depthIntensity || 0) * (effects.depthFactor || 0);
+    const brightness = effects.brightness * depthEffect;
+    material.diffuseColor = new BABYLON.Color3(brightness, brightness, brightness);
 
     // Apply blending mode
-    if (effects.blendMode !== undefined) {
-      material.alphaMode = effects.blendMode;
+    switch (effects.blendMode) {
+      case BABYLON.Constants.ALPHA_COMBINE:
+        material.alphaMode = BABYLON.Constants.ALPHA_COMBINE;
+        break;
+      case BABYLON.Constants.ALPHA_ADD:
+        material.alphaMode = BABYLON.Constants.ALPHA_ADD;
+        break;
+      case BABYLON.Constants.ALPHA_SUBTRACT:
+        material.alphaMode = BABYLON.Constants.ALPHA_SUBTRACT;
+        break;
+      case BABYLON.Constants.ALPHA_MULTIPLY:
+        material.alphaMode = BABYLON.Constants.ALPHA_MULTIPLY;
+        break;
+      case BABYLON.Constants.ALPHA_MAXIMIZED:
+        material.alphaMode = BABYLON.Constants.ALPHA_MAXIMIZED;
+        break;
+      default:
+        material.alphaMode = BABYLON.Constants.ALPHA_COMBINE;
     }
 
-    // Apply blend factor for certain blend modes
-    if (effects.blendFactor !== undefined && 
-        (effects.blendMode === BABYLON.Constants.ALPHA_ADD)) {
-      material.alpha = effects.blendFactor;
+    // Apply UV coordinates if provided, without flipping them vertically
+    if (effects.uv) {
+      planeMesh.setVerticesData(BABYLON.VertexBuffer.UVKind, effects.uv);
     }
 
     planeMesh.material = material;
@@ -82,6 +132,26 @@ class SceneManager {
   // Add this new method
   setBackgroundColor(color) {
     this.scene.clearColor = BABYLON.Color3.FromHexString(color);
+  }
+
+  // Add a method to update camera settings
+  updateCameraSettings(settings) {
+    if (settings.inertia !== undefined) this.camera.inertia = settings.inertia;
+    if (settings.angularSensibilityX !== undefined) this.camera.angularSensibilityX = settings.angularSensibilityX;
+    if (settings.angularSensibilityY !== undefined) this.camera.angularSensibilityY = settings.angularSensibilityY;
+    if (settings.panningSensibility !== undefined) this.camera.panningSensibility = settings.panningSensibility;
+    if (settings.wheelPrecision !== undefined) this.camera.wheelPrecision = settings.wheelPrecision;
+  }
+
+  resetCamera() {
+    this.camera.position = this.initialCameraPosition.clone();
+    this.camera.target = this.initialCameraTarget.clone();
+  }
+
+  setGlobalLightIntensity(intensity) {
+    if (this.globalLight) {
+      this.globalLight.intensity = intensity;
+    }
   }
 }
 

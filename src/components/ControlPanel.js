@@ -1,10 +1,9 @@
 import React from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaAdjust, FaSun, FaPalette, FaExchangeAlt, FaPaintBrush, FaUndo, FaArrowsAltH } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaUndo, FaArrowsAltH, FaLightbulb } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
-import ColorPalette from './ColorPalette';
 import { Range, getTrackBackground } from 'react-range';
 
-const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue }) => (
+const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange }) => (
   <div style={{ marginBottom: '15px' }}>
     <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
       {icon && <span style={{ marginRight: '10px' }}>{icon}</span>}
@@ -17,7 +16,13 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
         max={max}
         step={step}
         value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
+        onChange={(e) => {
+          const newValue = parseFloat(e.target.value);
+          onChange(newValue);
+          if (onImmediateChange) {
+            onImmediateChange(newValue);
+          }
+        }}
         style={{ flex: 1, marginRight: '10px' }}
       />
       <span style={{ minWidth: '50px', textAlign: 'right' }}>
@@ -112,14 +117,14 @@ const ControlPanel = ({
   stackLength, setStackLength,
   framePercentage, setFramePercentage,
   opacity, setOpacity,
-  contrast, setContrast,
   brightness, setBrightness,
   blendMode, setBlendMode,
   sliceRange, setSliceRange,
-  isFrameOrderInverted, setIsFrameOrderInverted,
-  backgroundColor, setBackgroundColor,
   isMobile, isOpen,
-  resetToDefaults
+  resetToDefaults,
+  onImmediateOpacityChange,
+  onImmediateBrightnessChange,
+  globalLightIntensity, setGlobalLightIntensity,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -129,7 +134,6 @@ const ControlPanel = ({
     }
   };
 
-  const convertContrast = (value) => Math.pow(2, 4 * (value - 0.5)); // Exponential contrast
   const convertBrightness = (value) => convertNonLinear(value, 2);
   const convertOpacity = (value) => convertNonLinear(value, 0.98); // Changed from 0.99 to 0.98
 
@@ -141,8 +145,6 @@ const ControlPanel = ({
     { name: 'Maximum', value: BABYLON.Constants.ALPHA_MAXIMIZED },
   ];
 
-  const backgroundColors = ['#000000', '#1a1a1a', '#333333', '#4d4d4d', '#666666'];
-
   const presets = [
     { name: 'Default', settings: { brightness: 0.5, contrast: 0.5, opacity: 0.5, blendMode: BABYLON.Constants.ALPHA_COMBINE } },
     { name: 'High Contrast', settings: { brightness: 0.6, contrast: 0.8, opacity: 0.7, blendMode: BABYLON.Constants.ALPHA_COMBINE } },
@@ -152,8 +154,6 @@ const ControlPanel = ({
 
   const applyPreset = (settings) => {
     setBrightness(settings.brightness || brightness);
-    setContrast(settings.contrast || contrast);
-    setOpacity(settings.opacity || opacity);
     setBlendMode(settings.blendMode || blendMode);
   };
 
@@ -183,17 +183,19 @@ const ControlPanel = ({
         <>
           <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#333' }}>Control Panel</h3>
           
-          <ControlGroup title="Presets">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-              {presets.map((preset, index) => (
-                <button key={index} onClick={() => applyPreset(preset.settings)} style={{ flex: '1 0 45%', padding: '5px' }}>
-                  {preset.name}
-                </button>
-              ))}
-            </div>
-          </ControlGroup>
-
           <ControlGroup title="Appearance">
+            <ControlItem
+              icon={<FaEye />}
+              label="Opacity"
+              value={opacity}
+              min={0.01}
+              max={0.98}
+              step={0.01}
+              onChange={setOpacity}
+              onImmediateChange={onImmediateOpacityChange}
+              convertValue={convertOpacity}
+              displayValue={(v) => v.toFixed(2)}
+            />
             <ControlItem
               icon={<FaSun />}
               label="Brightness"
@@ -202,29 +204,8 @@ const ControlPanel = ({
               max={1}
               step={0.01}
               onChange={setBrightness}
+              onImmediateChange={onImmediateBrightnessChange}
               convertValue={convertBrightness}
-              displayValue={(v) => v.toFixed(2)}
-            />
-            <ControlItem
-              icon={<FaAdjust />}
-              label="Contrast"
-              value={contrast}
-              min={0.01}
-              max={1}
-              step={0.01}
-              onChange={setContrast}
-              convertValue={convertContrast}
-              displayValue={(v) => v.toFixed(2)}
-            />
-            <ControlItem
-              icon={<FaEye />}
-              label="Opacity"
-              value={opacity}
-              min={0.01}
-              max={0.98} // Changed from 0.99 to 0.98
-              step={0.01}
-              onChange={setOpacity}
-              convertValue={convertOpacity}
               displayValue={(v) => v.toFixed(2)}
             />
             <div style={{ marginBottom: '15px' }}>
@@ -283,38 +264,35 @@ const ControlPanel = ({
               onChange={handleSlicePositionChange}
               unit="%"
             />
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={isFrameOrderInverted}
-                  onChange={() => setIsFrameOrderInverted(!isFrameOrderInverted)}
-                  style={{ marginRight: '10px' }}
-                />
-                <FaExchangeAlt style={{ marginRight: '10px' }} />
-                Invert Frame Order
-              </label>
-            </div>
           </ControlGroup>
 
-          <ControlGroup title="Background">
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                <FaPaintBrush style={{ marginRight: '10px' }} />
-                Background Color:
-              </label>
-              <ColorPalette
-                colors={backgroundColors}
-                selectedColor={backgroundColor}
-                onColorSelect={setBackgroundColor}
-              />
-            </div>
+          <ControlGroup title="Lighting">
+            <ControlItem
+              icon={<FaLightbulb />}
+              label="Global Light Intensity"
+              value={globalLightIntensity}
+              min={0}
+              max={5}
+              step={0.01}
+              onChange={setGlobalLightIntensity}
+              displayValue={(v) => v.toFixed(2)}
+            />
           </ControlGroup>
 
-          <button onClick={resetToDefaults} style={{ width: '100%', padding: '10px', marginTop: '20px' }}>
+          <button onClick={resetToDefaults} style={{ width: '100%', padding: '10px', marginTop: '20px', marginBottom: '20px' }}>
             <FaUndo style={{ marginRight: '10px' }} />
             Reset to Defaults
           </button>
+
+          <ControlGroup title="Presets">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+              {presets.map((preset, index) => (
+                <button key={index} onClick={() => applyPreset(preset.settings)} style={{ flex: '1 0 45%', padding: '5px' }}>
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+          </ControlGroup>
         </>
       )}
     </div>
