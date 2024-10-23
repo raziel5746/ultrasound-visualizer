@@ -27,6 +27,8 @@ html, body, #root, .App {
   flex: 1;
   display: flex;
   overflow: hidden;
+  justify-content: center;
+  align-items: center;
 }
 
 main {
@@ -103,4 +105,26 @@ input[type="file"] {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.welcome-screen {
+  text-align: center;
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+}
+
+.choose-file-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.choose-file-btn:hover {
+  background-color: #45a049;
 }
