@@ -9,6 +9,7 @@ class SceneManager {
     this.frameMeshes = [];
     this.light = null;
     this.globalLight = null;
+    this.renderLoop = null;
   }
 
   initialize() {
@@ -44,10 +45,6 @@ class SceneManager {
     this.initialCameraPosition = this.camera.position.clone();
     this.initialCameraTarget = this.camera.target.clone();
 
-    this.engine.runRenderLoop(() => {
-      this.scene.render();
-    });
-
     window.addEventListener('resize', () => {
       this.engine.resize();
     });
@@ -73,10 +70,14 @@ class SceneManager {
     // Apply effects
     material.alpha = effects.opacity || 1;
     
-    // Apply brightness and depth intensity
-    const depthEffect = 1 - (effects.depthIntensity || 0) * (effects.depthFactor || 0);
-    const brightness = effects.brightness * depthEffect;
-    material.diffuseColor = new BABYLON.Color3(brightness, brightness, brightness);
+    // Apply brightness and color mapping
+    const brightness = effects.brightness;
+    if (effects.colorMap) {
+      const colors = effects.colorMap(brightness);
+      material.diffuseColor = new BABYLON.Color3(colors.r, colors.g, colors.b);
+    } else {
+      material.diffuseColor = new BABYLON.Color3(brightness, brightness, brightness);
+    }
 
     // Apply blending mode
     switch (effects.blendMode) {
@@ -152,6 +153,19 @@ class SceneManager {
     if (this.globalLight) {
       this.globalLight.intensity = intensity;
     }
+  }
+
+  update() {
+    // Update logic here, if any
+  }
+
+  render() {
+    this.scene.render();
+  }
+
+  // Add a method to render a single frame
+  renderFrame() {
+    this.scene.render();
   }
 }
 

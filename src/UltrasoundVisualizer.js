@@ -2,11 +2,12 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as BABYLON from '@babylonjs/core';
 import SceneManager from './scene/SceneManager';
 import ControlPanel from './components/ControlPanel';
-import { FaImages, FaCog, FaUndoAlt, FaExchangeAlt, FaAdjust } from 'react-icons/fa';
+import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaList, FaCog } from 'react-icons/fa';
 import TextureAtlas from './utils/TextureAtlas';
 import ColorPalette from './components/ColorPalette';
+import { ColorMaps } from './utils/ColorMaps';
 
-const UltrasoundVisualizer = ({ videoUrl, setError }) => {
+const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const canvasRef = useRef(null);
   const sceneManagerRef = useRef(null);
   const [isLocalLoading, setIsLocalLoading] = useState(true);
@@ -18,41 +19,97 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
   const [sliceRange, setSliceRange] = useState([0, 100]);
   const [textureAtlas, setTextureAtlas] = useState(null);
   const [globalLightIntensity, setGlobalLightIntensity] = useState(1);
+  const [showPresets, setShowPresets] = useState(false);
+  const [isColorPaletteExpanded, setIsColorPaletteExpanded] = useState(false);
+  const colorPaletteRef = useRef(null);
+  const [targetFps, setTargetFps] = useState(60);
+  const lastRenderTime = useRef(0);
+  const animationFrameId = useRef(null);
 
-  // Wrap defaultValues in useMemo
   const defaultValues = useMemo(() => ({
     stackLength: 1.5,
     framePercentage: 50,
-    opacity: 0.3, // Changed from 1 to 0.3
+    opacity: 0.3,
     brightness: 1,
-    depthIntensity: 0.5,
     blendMode: BABYLON.Constants.ALPHA_COMBINE,
     sliceRange: [0, 100],
     isFrameOrderInverted: false,
     backgroundColor: '#000000',
-  }), []); // Empty dependency array means this object will be created only once
+  }), []);
 
   const [stackLength, setStackLength] = useState(defaultValues.stackLength);
   const [framePercentage, setFramePercentage] = useState(defaultValues.framePercentage);
   const [opacity, setOpacity] = useState(defaultValues.opacity);
   const [brightness, setBrightness] = useState(defaultValues.brightness);
-  const [depthIntensity, setDepthIntensity] = useState(defaultValues.depthIntensity);
   const [blendMode, setBlendMode] = useState(defaultValues.blendMode);
   const [isFrameOrderInverted, setIsFrameOrderInverted] = useState(defaultValues.isFrameOrderInverted);
   const [backgroundColor, setBackgroundColor] = useState(defaultValues.backgroundColor);
+
+  // Add state for file name
+  const [fileName, setFileName] = useState('');
+
+  // Add color map state and parameters
+  const [colorMap, setColorMap] = useState('DEFAULT');
+  const [colorMapParams, setColorMapParams] = useState({});
+
+  // Initialize color map parameters when color map changes
+  useEffect(() => {
+    const defaultParams = ColorMaps[colorMap]?.defaultParams || {};
+    setColorMapParams(defaultParams);
+  }, [colorMap]);
+
+  // Update the file name when videoUrl changes
+  useEffect(() => {
+    if (videoUrl) {
+      if (videoUrl instanceof Blob) {
+        // For files uploaded through input
+        const name = videoUrl.name;
+        // If name doesn't include extension, try to get it from type
+        if (!name.includes('.')) {
+          const extension = videoUrl.type.split('/')[1];
+          setFileName(`${name}.${extension}`);
+        } else {
+          setFileName(name);
+        }
+      } else {
+        // For URLs, extract the file name from the path
+        const urlPath = videoUrl.split('/').pop().split('?')[0];
+        const name = decodeURIComponent(urlPath);
+        // If name doesn't include extension, add .mp4 as default
+        if (!name.includes('.')) {
+          setFileName(`${name}.mp4`);
+        } else {
+          setFileName(name);
+        }
+      }
+    } else {
+      setFileName('No file selected');
+    }
+  }, [videoUrl]);
 
   useEffect(() => {
     if (canvasRef.current) {
       sceneManagerRef.current = new SceneManager(canvasRef.current);
       sceneManagerRef.current.initialize();
 
+      const renderLoop = (time) => {
+        if (time - lastRenderTime.current >= 1000 / targetFps) {
+          sceneManagerRef.current.renderFrame();
+          lastRenderTime.current = time;
+        }
+        animationFrameId.current = requestAnimationFrame(renderLoop);
+      };
+
+      animationFrameId.current = requestAnimationFrame(renderLoop);
+
       return () => {
+        cancelAnimationFrame(animationFrameId.current);
         if (sceneManagerRef.current) {
           sceneManagerRef.current.dispose();
         }
       };
     }
-  }, []);
+  }, [targetFps]);
 
   useEffect(() => {
     if (sceneManagerRef.current) {
@@ -118,8 +175,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
       return;
     }
 
+    setTextureAtlas(null);
     setIsLocalLoading(true);
     setError(null);
+    setExtractionProgress(0);
+    setTotalFrames(0);
+    setRenderedFrames(0);
 
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -130,8 +191,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
         await video.play();
         video.pause();
         const frameCount = await extractFrames(video);
-        // Instead of setting frames, we're now setting the texture atlas
-        // setFrames(extractedFrames);
         setTotalFrames(frameCount);
         setIsLocalLoading(false);
       } catch (error) {
@@ -172,12 +231,11 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     setFramePercentage(defaultValues.framePercentage);
     setOpacity(defaultValues.opacity);
     setBrightness(defaultValues.brightness);
-    setDepthIntensity(defaultValues.depthIntensity);
     setBlendMode(defaultValues.blendMode);
     setSliceRange(defaultValues.sliceRange);
     setIsFrameOrderInverted(defaultValues.isFrameOrderInverted);
     setBackgroundColor(defaultValues.backgroundColor);
-    setGlobalLightIntensity(1); // Add this line to reset global light intensity
+    setGlobalLightIntensity(1);
     if (sceneManagerRef.current) {
       sceneManagerRef.current.updateCameraSettings({
         inertia: 0.5,
@@ -187,7 +245,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
         wheelPrecision: 2
       });
     }
-  }, [defaultValues]); // Remove sceneManagerRef from the dependency array
+  }, [defaultValues]);
 
   const updateFrameStack = useCallback(() => {
     if (sceneManagerRef.current && textureAtlas) {
@@ -210,21 +268,18 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
           : Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1);
         const position = new BABYLON.Vector3(0, 0, i * actualFrameDistance - offset);
         
-        const depthFactor = 1 - (i - startIndex) / (endIndex - startIndex);
-        
         sceneManagerRef.current.createFrameMesh(textureAtlas.atlas, position, scale, {
           opacity,
           brightness,
-          depthIntensity,
-          depthFactor,
           blendMode,
-          uv: textureAtlas.getFrameUV(frameIndex)
+          uv: textureAtlas.getFrameUV(frameIndex),
+          colorMap: (value) => ColorMaps[colorMap].map(value, colorMapParams)
         });
       }
     }
   }, [
-    textureAtlas, stackLength, framePercentage, opacity, brightness, depthIntensity,
-    blendMode, isFrameOrderInverted, sliceRange
+    textureAtlas, stackLength, framePercentage, opacity, brightness,
+    blendMode, isFrameOrderInverted, sliceRange, colorMap, colorMapParams
   ]);
 
   const throttledUpdateFrameStack = useMemo(() => {
@@ -241,7 +296,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
 
   useEffect(() => {
     throttledUpdateFrameStack();
-  }, [opacity, brightness, depthIntensity, throttledUpdateFrameStack]);
+  }, [opacity, brightness, throttledUpdateFrameStack]);
 
   const handleImmediateUpdate = useCallback((setter) => (value) => {
     setter(value);
@@ -250,16 +305,30 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768); // Consider devices with width <= 768px as mobile
+      const isMobileDevice = window.innerWidth <= 768;
+      setIsMobile(isMobileDevice);
+      setTargetFps(isMobileDevice ? 30 : 60);
+
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.engine.resize();
+        sceneManagerRef.current.setBackgroundColor(backgroundColor);
+        updateFrameStack();
+      }
     };
 
-    handleResize(); // Call once to set initial state
+    handleResize();
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [updateFrameStack, backgroundColor]);
+
+  useEffect(() => {
+    if (textureAtlas) {
+      updateFrameStack();
+    }
+  }, [textureAtlas, updateFrameStack]);
 
   const handleSliceRangeChange = useCallback((newRange) => {
     setSliceRange(newRange);
@@ -277,59 +346,238 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
     setIsFrameOrderInverted(prev => !prev);
   }, []);
 
+  const toggleColorPalette = useCallback(() => {
+    setIsColorPaletteExpanded(prev => !prev);
+  }, []);
+
+  useEffect(() => {
+    if (colorPaletteRef.current) {
+      if (isColorPaletteExpanded) {
+        colorPaletteRef.current.style.maxHeight = `${colorPaletteRef.current.scrollHeight}px`;
+        colorPaletteRef.current.style.opacity = '1';
+      } else {
+        colorPaletteRef.current.style.maxHeight = '0';
+        colorPaletteRef.current.style.opacity = '0';
+      }
+    }
+  }, [isColorPaletteExpanded]);
+
+  const handleFileSelect = useCallback(() => {
+    if (onFileSelect && typeof onFileSelect === 'function') {
+      try {
+        onFileSelect();
+      } catch (error) {
+        console.error('Error in file selection:', error);
+        setError('Failed to open file selection. Please try again.');
+      }
+    } else {
+      console.error('onFileSelect is not a function');
+      setError('File selection is not available. Please refresh the page and try again.');
+    }
+  }, [onFileSelect, setError]);
+
+  const presets = [
+    { name: 'Default', settings: { brightness: 0.5, contrast: 0.5, opacity: 0.5, blendMode: BABYLON.Constants.ALPHA_COMBINE } },
+    { name: 'High Contrast', settings: { brightness: 0.6, contrast: 0.8, opacity: 0.7, blendMode: BABYLON.Constants.ALPHA_COMBINE } },
+    { name: 'Soft Tissue', settings: { brightness: 0.4, contrast: 0.3, opacity: 0.6, blendMode: BABYLON.Constants.ALPHA_ADD } },
+    { name: 'Bone', settings: { brightness: 0.7, contrast: 0.9, opacity: 0.8, blendMode: BABYLON.Constants.ALPHA_MAXIMIZED } },
+  ];
+
+  const applyPreset = useCallback((settings) => {
+    setBrightness(settings.brightness || brightness);
+    setOpacity(settings.opacity || opacity);
+    setBlendMode(settings.blendMode || blendMode);
+    setShowPresets(false);
+    throttledUpdateFrameStack();
+  }, [brightness, opacity, blendMode, throttledUpdateFrameStack]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
-        {/* Background color selection */}
+        
+        {/* Top controls */}
         <div style={{
           position: 'absolute',
           top: '10px',
           left: '10px',
+          right: '10px',
+          display: 'flex',
+          flexDirection: 'column',
           backgroundColor: 'rgba(0, 0, 0, 0.7)',
           padding: '10px',
           borderRadius: '5px',
           zIndex: 1000,
         }}>
-          <ColorPalette
-            colors={backgroundColors}
-            selectedColor={backgroundColor}
-            onColorSelect={setBackgroundColor}
-          />
+          {/* File name at the top */}
+          <div style={{
+            color: 'white',
+            textAlign: 'center',
+            padding: '5px 0',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            marginBottom: '10px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          }}>
+            {fileName}
+          </div>
+
+          {/* Controls container */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
+            {/* Left section */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: isMobile ? '10px' : '0' }}>
+              {isMobile ? (
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: backgroundColor,
+                      cursor: 'pointer',
+                      border: '2px solid white',
+                      transition: 'transform 0.3s ease-in-out',
+                      transform: isColorPaletteExpanded ? 'scale(1.1)' : 'scale(1)',
+                    }}
+                    onClick={toggleColorPalette}
+                  />
+                  <div
+                    ref={colorPaletteRef}
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: '0',
+                      marginTop: '5px',
+                      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                      borderRadius: '5px',
+                      padding: '5px',
+                      maxHeight: '0',
+                      opacity: '0',
+                      overflow: 'hidden',
+                      transition: 'max-height 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                    }}
+                  >
+                    <ColorPalette
+                      colors={backgroundColors}
+                      selectedColor={backgroundColor}
+                      onColorSelect={(color) => {
+                        setBackgroundColor(color);
+                        setIsColorPaletteExpanded(false);
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <ColorPalette
+                  colors={backgroundColors}
+                  selectedColor={backgroundColor}
+                  onColorSelect={setBackgroundColor}
+                />
+              )}
+              <FaFolderOpen 
+                style={{ marginLeft: '15px', cursor: 'pointer', color: 'white' }} 
+                onClick={handleFileSelect}
+                title="Choose New File"
+              />
+            </div>
+            
+            {/* Middle section */}
+            <div style={{ 
+              color: 'white', 
+              display: 'flex', 
+              alignItems: 'center', 
+              marginBottom: isMobile ? '10px' : '0',
+              gap: '20px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <FaImages style={{ marginRight: '8px' }} />
+                <span>Frames: {renderedFrames}</span>
+              </div>
+
+              {/* FPS Badge */}
+              <div style={{
+                backgroundColor: '#3498db',
+                color: 'white',
+                padding: '4px 12px',
+                borderRadius: '15px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: '80px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+              }}>
+                {targetFps} FPS
+              </div>
+            </div>
+            
+            {/* Right section */}
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: isMobile ? 'center' : 'flex-end' }}>
+              <FaUndoAlt 
+                style={{ margin: '5px', cursor: 'pointer', color: 'white' }} 
+                onClick={resetCamera}
+                title="Reset Camera"
+              />
+              <FaExchangeAlt 
+                style={{ margin: '5px', cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
+                onClick={toggleFrameOrderInversion}
+                title="Invert Frame Order"
+              />
+              <FaRedo
+                style={{ margin: '5px', cursor: 'pointer', color: 'white' }}
+                onClick={resetToDefaults}
+                title="Reset to Defaults"
+              />
+              <div style={{ position: 'relative', margin: '5px' }}>
+                <FaList
+                  style={{ cursor: 'pointer', color: 'white' }}
+                  onClick={() => setShowPresets(!showPresets)}
+                  title="Presets"
+                />
+                {showPresets && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                    borderRadius: '5px',
+                    padding: '10px',
+                    marginTop: '5px',
+                  }}>
+                    {presets.map((preset, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          color: 'white',
+                          padding: '5px 10px',
+                          cursor: 'pointer',
+                          borderRadius: '3px',
+                          transition: 'background-color 0.2s',
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        onClick={() => applyPreset(preset.settings)}
+                      >
+                        {preset.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-        {/* Top right controls */}
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '20px',
-          fontSize: '14px',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-        }}>
-          <FaImages style={{ marginRight: '8px' }} />
-          <span style={{ marginRight: '15px' }}>Frames: {renderedFrames}</span>
-          <FaUndoAlt 
-            style={{ marginRight: '15px', cursor: 'pointer' }} 
-            onClick={resetCamera}
-            title="Reset Camera"
-          />
-          <FaExchangeAlt 
-            style={{ marginRight: '15px', cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
-            onClick={toggleFrameOrderInversion}
-            title="Invert Frame Order"
-          />
-          <FaAdjust 
-            style={{ cursor: 'pointer', color: depthIntensity > 0 ? '#3498db' : 'white' }} 
-            onClick={() => setDepthIntensity(depthIntensity > 0 ? 0 : 0.5)}
-            title="Toggle Depth Intensity"
-          />
-        </div>
+
+        {/* Loading screen remains the same */}
         {isLocalLoading && (
           <div style={{
             position: 'absolute',
@@ -366,11 +614,13 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
           </div>
         )}
       </div>
+
+      {/* Mobile toggle and ControlPanel remain the same */}
       {isMobile && (
         <div
           style={{
             position: 'fixed',
-            bottom: isControlPanelOpen ? '300px' : 0, // Adjust this value based on your control panel height
+            bottom: isControlPanelOpen ? '300px' : 0,
             left: 0,
             right: 0,
             backgroundColor: '#f0f0f0',
@@ -380,7 +630,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
             alignItems: 'center',
             cursor: 'pointer',
             boxShadow: '0 -2px 5px rgba(0,0,0,0.1)',
-            zIndex: 1001, // Ensure it's above the control panel
+            zIndex: 1001,
           }}
           onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
         >
@@ -403,11 +653,14 @@ const UltrasoundVisualizer = ({ videoUrl, setError }) => {
         setSliceRange={handleSliceRangeChange}
         isMobile={isMobile}
         isOpen={!isMobile || isControlPanelOpen}
-        resetToDefaults={resetToDefaults}
         onImmediateOpacityChange={handleImmediateUpdate(setOpacity)}
         onImmediateBrightnessChange={handleImmediateUpdate(setBrightness)}
         globalLightIntensity={globalLightIntensity}
         setGlobalLightIntensity={setGlobalLightIntensity}
+        colorMap={colorMap}
+        setColorMap={setColorMap}
+        colorMapParams={colorMapParams}
+        setColorMapParams={setColorMapParams}
       />
     </div>
   );
