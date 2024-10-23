@@ -12,19 +12,8 @@ class SceneManager {
     this.renderLoop = null;
     this.defaultPipeline = null;
     this.postProcesses = {};
-    this.clipPlane = null;
-    this.clipPlanes = {
-      top: null,
-      bottom: null,
-      left: null,
-      right: null
-    };
-    this.debugPlanes = {
-      top: null,
-      bottom: null,
-      left: null,
-      right: null
-    };
+    this.frameWidth = null;
+    this.frameHeight = null;
   }
 
   initialize() {
@@ -98,25 +87,12 @@ class SceneManager {
     this.defaultPipeline.chromaticAberration.aberrationAmount = 30;
     this.defaultPipeline.chromaticAberration.radialIntensity = 1;
 
-    // Create a vertical plane that cuts through the center
-    this.clipPlanes.left = new BABYLON.Plane(1, 0, 0, 0);
-
-    // Create a horizontal plane that cuts through the center
-    this.clipPlanes.top = new BABYLON.Plane(0, 1, 0, 0);
-
-    // Log the planes for debugging
-    console.log('Initial clip planes:', {
-      vertical: { normal: [1, 0, 0], distance: 0 },
-      horizontal: { normal: [0, 1, 0], distance: 0 }
-    });
-
     window.addEventListener('resize', () => {
       this.engine.resize();
     });
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
-    // Add these as class properties so we can reference them for scaling
     this.frameWidth = 1.6 * scale;
     this.frameHeight = 1.0 * scale;
     
@@ -130,10 +106,6 @@ class SceneManager {
     material.diffuseTexture = texture;
     material.backFaceCulling = false;
     
-    // Enable clipping on the material
-    material.clipPlanes = Object.values(this.clipPlanes).filter(plane => plane !== null);
-    material.forceClipPlane = true; // Add this line to force clipping
-
     // Remove specular reflection
     material.specularColor = new BABYLON.Color3(0, 0, 0);
     
@@ -173,7 +145,7 @@ class SceneManager {
         material.alphaMode = BABYLON.Constants.ALPHA_COMBINE;
     }
 
-    // Apply UV coordinates if provided, without flipping them vertically
+    // Apply UV coordinates if provided
     if (effects.uv) {
       planeMesh.setVerticesData(BABYLON.VertexBuffer.UVKind, effects.uv);
     }
@@ -198,10 +170,6 @@ class SceneManager {
   }
 
   dispose() {
-    // Add cleanup for debug planes
-    Object.values(this.debugPlanes).forEach(plane => {
-      if (plane) plane.dispose();
-    });
     this.clearFrameMeshes();
     this.scene.dispose();
     this.engine.dispose();
@@ -297,69 +265,32 @@ class SceneManager {
     if (!bounds) return;
 
     const { top, bottom, left, right } = bounds;
-    // Use the frame dimensions to scale the clip planes
-    const scaleX = this.frameWidth / 2;  // Divide by 2 because normalized coords are -1 to 1
+    const scaleX = this.frameWidth / 2;
     const scaleY = this.frameHeight / 2;
 
-    // Dispose of existing debug planes
-    Object.values(this.debugPlanes).forEach(plane => {
-      if (plane) plane.dispose();
-    });
+    // Create the clipping planes
+    this.scene.clipPlane = new BABYLON.Plane(1, 0, 0, -right * scaleX);    // Right plane
+    this.scene.clipPlane2 = new BABYLON.Plane(-1, 0, 0, left * scaleX);    // Left plane
+    this.scene.clipPlane3 = new BABYLON.Plane(0, 1, 0, -top * scaleY);     // Top plane
+    this.scene.clipPlane4 = new BABYLON.Plane(0, -1, 0, bottom * scaleY);  // Bottom plane
 
-    // Create visible debug planes
-    this.debugPlanes.left = this.createDebugPlane(new BABYLON.Color3(1, 0, 0));   // Red
-    this.debugPlanes.right = this.createDebugPlane(new BABYLON.Color3(0, 1, 0));  // Green
-    this.debugPlanes.top = this.createDebugPlane(new BABYLON.Color3(0, 0, 1));    // Blue
-    this.debugPlanes.bottom = this.createDebugPlane(new BABYLON.Color3(1, 1, 0)); // Yellow
-
-    // Position the planes using the frame dimensions for scaling
-    this.debugPlanes.left.position = new BABYLON.Vector3(scaleX * left, 0, 0);
-    this.debugPlanes.left.rotation.y = Math.PI / 2;
-    this.debugPlanes.left.scaling.y = 2; // Make the planes big enough to see
-
-    this.debugPlanes.right.position = new BABYLON.Vector3(scaleX * right, 0, 0);
-    this.debugPlanes.right.rotation.y = Math.PI / 2;
-    this.debugPlanes.right.scaling.y = 2;
-
-    this.debugPlanes.top.position = new BABYLON.Vector3(0, scaleY * top, 0);
-    this.debugPlanes.top.rotation.x = Math.PI / 2;
-    this.debugPlanes.top.scaling.y = 2;
-
-    this.debugPlanes.bottom.position = new BABYLON.Vector3(0, scaleY * bottom, 0);
-    this.debugPlanes.bottom.rotation.x = Math.PI / 2;
-    this.debugPlanes.bottom.scaling.y = 2;
-
-    // Create clipping planes using the scaled coordinates
-    this.clipPlanes.left = new BABYLON.Plane(1, 0, 0, -scaleX * left);
-    this.clipPlanes.right = new BABYLON.Plane(-1, 0, 0, scaleX * right);
-    this.clipPlanes.top = new BABYLON.Plane(0, 1, 0, -scaleY * top);
-    this.clipPlanes.bottom = new BABYLON.Plane(0, -1, 0, scaleY * bottom);
-
-    // Update all existing meshes with the new clip planes
+    // Update all existing meshes with all clipping planes
     this.frameMeshes.forEach(mesh => {
       if (mesh.material) {
-        const activeClipPlanes = Object.values(this.clipPlanes).filter(plane => plane !== null);
-        mesh.material.clipPlanes = activeClipPlanes;
+        mesh.material.clipPlane = this.scene.clipPlane;
+        mesh.material.clipPlane2 = this.scene.clipPlane2;
+        mesh.material.clipPlane3 = this.scene.clipPlane3;
+        mesh.material.clipPlane4 = this.scene.clipPlane4;
+        mesh.material.forceClipPlane = true;
+        mesh.material.needDepthPrePass = true;
+        mesh.material.separateCullingPass = true;
         mesh.material.markAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
+        mesh.material.markAsDirty(BABYLON.Material.AllDirtyFlag);
       }
     });
 
     this.scene.markAllMaterialsAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
-  }
-
-  createDebugPlane(color) {
-    const plane = BABYLON.MeshBuilder.CreatePlane("debugPlane", { 
-      width: 30,  // Make it large enough to see
-      height: 30
-    }, this.scene);
-    
-    const material = new BABYLON.StandardMaterial("debugPlaneMaterial", this.scene);
-    material.diffuseColor = color;
-    material.alpha = 0.5; // Make it semi-transparent
-    material.backFaceCulling = false;
-    plane.material = material;
-
-    return plane;
+    this.scene.markAllMaterialsAsDirty(BABYLON.Material.AllDirtyFlag);
   }
 }
 

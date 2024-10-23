@@ -9,21 +9,50 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
   const [dragHandle, setDragHandle] = useState(null);
   const [dragStart, setDragStart] = useState(null);
   const [showSliders, setShowSliders] = useState(false);
+  const [debouncedRectangle, setDebouncedRectangle] = useState(null);
 
-  // Convert canvas coordinates to normalized coordinates (-1 to 1)
-  const normalizeCoords = (x, y) => {
+  // Add frame aspect ratio constant
+  const FRAME_ASPECT_RATIO = 1.6;
+
+  // Move getFrameGuideRect before its first use
+  const getFrameGuideRect = useCallback(() => {
+    const margin = 0.1;
+    const availableWidth = width * (1 - 2 * margin);
+    const availableHeight = height * (1 - 2 * margin);
+
+    let guideWidth, guideHeight;
+    
+    if (availableWidth / availableHeight > FRAME_ASPECT_RATIO) {
+      guideHeight = availableHeight;
+      guideWidth = guideHeight * FRAME_ASPECT_RATIO;
+    } else {
+      guideWidth = availableWidth;
+      guideHeight = guideWidth / FRAME_ASPECT_RATIO;
+    }
+
+    const x = (width - guideWidth) / 2;
+    const y = (height - guideHeight) / 2;
+
+    return {
+      x,
+      y,
+      width: guideWidth,
+      height: guideHeight
+    };
+  }, [width, height]);
+
+  // Wrap normalizeCoords in useCallback
+  const normalizeCoords = useCallback((x, y) => {
     const guideRect = getFrameGuideRect();
     
-    // Convert to coordinates relative to the guide rectangle center
     const relativeX = x - (guideRect.x + guideRect.width / 2);
     const relativeY = y - (guideRect.y + guideRect.height / 2);
     
-    // Normalize based on guide rectangle dimensions
     return {
       x: relativeX / (guideRect.width / 2),
-      y: -relativeY / (guideRect.height / 2) // Flip Y coordinate
+      y: -relativeY / (guideRect.height / 2)
     };
-  };
+  }, [getFrameGuideRect]);
 
   const getHandles = useCallback(() => {
     if (!rectangle) return [];
@@ -123,8 +152,9 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         height: y - prev.y
       }));
     } else if (isDragging) {
-      const dx = x - dragStart.x;
-      const dy = y - dragStart.y;
+      // Calculate the drag distance without applying scale again
+      const dx = (e.clientX - canvasRect.left) * scaleX - dragStart.x;
+      const dy = (e.clientY - canvasRect.top) * scaleY - dragStart.y;
 
       setRectangle(prev => {
         const x1 = prev.x;
@@ -159,6 +189,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
         return newRect;
       });
+      
       setDragStart({ x, y });
     }
 
@@ -220,40 +251,6 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     setDragHandle(null);
     canvasRef.current.style.cursor = 'default';
   };
-
-  // Add frame aspect ratio constant
-  const FRAME_ASPECT_RATIO = 1.6;
-
-  // Calculate the frame guide dimensions to maintain aspect ratio
-  const getFrameGuideRect = useCallback(() => {
-    const margin = 0.1; // Changed from 0.2 to 0.1 (10% margin instead of 20%)
-    const availableWidth = width * (1 - 2 * margin);
-    const availableHeight = height * (1 - 2 * margin);
-
-    let guideWidth, guideHeight;
-    
-    // Calculate dimensions to fit while maintaining aspect ratio
-    if (availableWidth / availableHeight > FRAME_ASPECT_RATIO) {
-      // Height is the limiting factor
-      guideHeight = availableHeight;
-      guideWidth = guideHeight * FRAME_ASPECT_RATIO;
-    } else {
-      // Width is the limiting factor
-      guideWidth = availableWidth;
-      guideHeight = guideWidth / FRAME_ASPECT_RATIO;
-    }
-
-    // Center the guide rectangle
-    const x = (width - guideWidth) / 2;
-    const y = (height - guideHeight) / 2;
-
-    return {
-      x,
-      y,
-      width: guideWidth,
-      height: guideHeight
-    };
-  }, [width, height]);
 
   useEffect(() => {
     const guideRect = getFrameGuideRect();
@@ -328,7 +325,31 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     });
   }, [getFrameGuideRect, onClipPlanesChange]);
 
-  // Add slider controls
+  // Update clip planes when debounced rectangle changes
+  useEffect(() => {
+    if (debouncedRectangle) {
+      const x1 = debouncedRectangle.x;
+      const x2 = debouncedRectangle.x + debouncedRectangle.width;
+      const y1 = debouncedRectangle.y;
+      const y2 = debouncedRectangle.y + debouncedRectangle.height;
+
+      const normalized = {
+        left: normalizeCoords(Math.min(x1, x2), 0).x,
+        right: normalizeCoords(Math.max(x1, x2), 0).x,
+        top: normalizeCoords(0, Math.min(y1, y2)).y,
+        bottom: normalizeCoords(0, Math.max(y1, y2)).y
+      };
+      
+      onClipPlanesChange(normalized);
+    }
+  }, [debouncedRectangle, onClipPlanesChange, normalizeCoords]);
+
+  // Update debounced rectangle whenever the actual rectangle changes
+  useEffect(() => {
+    setDebouncedRectangle(rectangle);
+  }, [rectangle]);
+
+  // Modify slider onChange handlers to use debouncing
   const renderSliders = () => (
     <div style={{
       marginTop: '10px',
@@ -346,23 +367,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           value={rectangle?.x || 0}
           onChange={(e) => {
             const newX = parseFloat(e.target.value);
-            setRectangle(prev => {
-              const newRect = {
-                ...prev,
-                width: (prev.x + prev.width) - newX,
-                x: newX
-              };
-              
-              // Update clip planes
-              onClipPlanesChange({
-                left: normalizeCoords(Math.min(newRect.x, newRect.x + newRect.width), 0).x,
-                right: normalizeCoords(Math.max(newRect.x, newRect.x + newRect.width), 0).x,
-                top: normalizeCoords(0, Math.min(newRect.y, newRect.y + newRect.height)).y,
-                bottom: normalizeCoords(0, Math.max(newRect.y, newRect.y + newRect.height)).y
-              });
-              
-              return newRect;
-            });
+            setRectangle(prev => ({
+              ...prev,
+              width: (prev.x + prev.width) - newX,
+              x: newX
+            }));
           }}
           style={{ width: '100%' }}
         />

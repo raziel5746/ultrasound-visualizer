@@ -1,38 +1,56 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaMagic, FaSlidersH, FaDice, FaRainbow } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
 import SliceControl from './SliceControl';
+import useDebounce from '../hooks/useDebounce';
 
-const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange }) => (
-  <div style={{ marginBottom: '15px' }}>
-    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-      {icon && <span style={{ marginRight: '10px' }}>{icon}</span>}
-      {label}:
-    </label>
-    <div style={{ display: 'flex', alignItems: 'center' }}>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => {
-          const newValue = parseFloat(e.target.value);
-          onChange(newValue);
-          if (onImmediateChange) {
-            onImmediateChange(newValue);
-          }
-        }}
-        style={{ flex: 1, marginRight: '10px' }}
-      />
-      <span style={{ minWidth: '50px', textAlign: 'right' }}>
-        {(displayValue || ((v) => v.toFixed(2)))(convertValue ? convertValue(value) : value)}{unit}
-      </span>
+const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange }) => {
+  const [localValue, setLocalValue] = useState(value);
+  const debouncedValue = useDebounce(localValue, 16); // 60fps = ~16ms
+
+  // Update local value when prop value changes
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  // Apply debounced value
+  useEffect(() => {
+    if (debouncedValue !== value) {
+      onChange(debouncedValue);
+    }
+  }, [debouncedValue, onChange, value]);
+
+  return (
+    <div style={{ marginBottom: '15px' }}>
+      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+        {icon && <span style={{ marginRight: '10px' }}>{icon}</span>}
+        {label}:
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={localValue}
+          onChange={(e) => {
+            const newValue = parseFloat(e.target.value);
+            setLocalValue(newValue);
+            if (onImmediateChange) {
+              onImmediateChange(newValue);
+            }
+          }}
+          style={{ flex: 1, marginRight: '10px' }}
+        />
+        <span style={{ minWidth: '50px', textAlign: 'right' }}>
+          {(displayValue || ((v) => v.toFixed(2)))(convertValue ? convertValue(localValue) : localValue)}{unit}
+        </span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const RangeSlider = ({ label, min, max, values, onChange }) => (
   <div style={{ marginBottom: '15px' }}>
