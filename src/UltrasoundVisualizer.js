@@ -6,6 +6,8 @@ import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaList, FaCog
 import TextureAtlas from './utils/TextureAtlas';
 import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
+import SliceControl from './components/SliceControl';
+import { ControlGroup } from './components/ControlPanel';
 
 const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const canvasRef = useRef(null);
@@ -91,6 +93,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     if (canvasRef.current) {
       sceneManagerRef.current = new SceneManager(canvasRef.current);
       sceneManagerRef.current.initialize();
+      // Remove this line:
+      // sceneManagerRef.current.setupClippingPlane(); 
 
       const renderLoop = (time) => {
         if (time - lastRenderTime.current >= 1000 / targetFps) {
@@ -391,6 +395,81 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     throttledUpdateFrameStack();
   }, [brightness, opacity, blendMode, throttledUpdateFrameStack]);
 
+  // In UltrasoundVisualizer.js, add new state:
+  const [postProcessing, setPostProcessing] = useState({
+    exposure: 1,
+    contrast: 1,
+    bloomEnabled: true,
+    bloomThreshold: 0.8,
+    bloomWeight: 0.3,
+    sharpenEnabled: true,
+    sharpenAmount: 0.3,
+    grainEnabled: false,
+    grainIntensity: 10,
+    chromaticAberrationEnabled: false,
+    chromaticAberrationAmount: 30,
+  });
+
+  // Add this near the other useRef declarations
+  const postProcessingUpdateTimeout = useRef(null);
+
+  // Update the handleImmediatePostProcessingChange function
+  const handleImmediatePostProcessingChange = useCallback((key) => (value) => {
+    // Clear any pending updates
+    if (postProcessingUpdateTimeout.current) {
+      clearTimeout(postProcessingUpdateTimeout.current);
+    }
+
+    // Update the state immediately for the slider
+    setPostProcessing(prev => ({
+      ...prev,
+      [key]: value
+    }));
+
+    // Debounce the actual post-processing update
+    postProcessingUpdateTimeout.current = setTimeout(() => {
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.updatePostProcessing({
+          [key]: value
+        });
+      }
+    }, 16); // roughly one frame at 60fps
+  }, []);
+
+  // Update the useEffect for post-processing
+  useEffect(() => {
+    // Only update on mount and when switching features on/off
+    if (sceneManagerRef.current) {
+      const relevantChanges = {
+        bloomEnabled: postProcessing.bloomEnabled,
+        sharpenEnabled: postProcessing.sharpenEnabled,
+        grainEnabled: postProcessing.grainEnabled,
+        chromaticAberrationEnabled: postProcessing.chromaticAberrationEnabled
+      };
+      sceneManagerRef.current.updatePostProcessing(relevantChanges);
+    }
+  }, [
+    postProcessing.bloomEnabled,
+    postProcessing.sharpenEnabled,
+    postProcessing.grainEnabled,
+    postProcessing.chromaticAberrationEnabled
+  ]);
+
+  // Add cleanup
+  useEffect(() => {
+    return () => {
+      if (postProcessingUpdateTimeout.current) {
+        clearTimeout(postProcessingUpdateTimeout.current);
+      }
+    };
+  }, []);
+
+  const handleClipPlanesChange = useCallback((bounds) => {
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.updateClipPlanes(bounds);
+    }
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -620,7 +699,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: isControlPanelOpen ? '300px' : 0,
+            bottom: isControlPanelOpen ? '400px' : 0, // Match the control panel height
             left: 0,
             right: 0,
             backgroundColor: '#f0f0f0',
@@ -630,7 +709,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
             alignItems: 'center',
             cursor: 'pointer',
             boxShadow: '0 -2px 5px rgba(0,0,0,0.1)',
-            zIndex: 1001,
+            zIndex: 1001, // Higher than the control panel's z-index (1000)
+            transition: 'bottom 0.2s ease-in-out', // Smooth transition
           }}
           onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
         >
@@ -661,7 +741,22 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         setColorMap={setColorMap}
         colorMapParams={colorMapParams}
         setColorMapParams={setColorMapParams}
-      />
+        postProcessing={postProcessing}
+        setPostProcessing={setPostProcessing}
+        onImmediateGlobalLightChange={handleImmediateUpdate(setGlobalLightIntensity)}
+        onImmediatePostProcessingChange={handleImmediatePostProcessingChange}
+        onClipPlanesChange={handleClipPlanesChange}
+      >
+        <ControlGroup title="Slice Control">
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+            <SliceControl
+              width={200}
+              height={200}
+              onClipPlanesChange={handleClipPlanesChange}
+            />
+          </div>
+        </ControlGroup>
+      </ControlPanel>
     </div>
   );
 };

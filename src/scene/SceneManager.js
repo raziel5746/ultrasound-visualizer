@@ -10,6 +10,21 @@ class SceneManager {
     this.light = null;
     this.globalLight = null;
     this.renderLoop = null;
+    this.defaultPipeline = null;
+    this.postProcesses = {};
+    this.clipPlane = null;
+    this.clipPlanes = {
+      top: null,
+      bottom: null,
+      left: null,
+      right: null
+    };
+    this.debugPlanes = {
+      top: null,
+      bottom: null,
+      left: null,
+      right: null
+    };
   }
 
   initialize() {
@@ -45,15 +60,69 @@ class SceneManager {
     this.initialCameraPosition = this.camera.position.clone();
     this.initialCameraTarget = this.camera.target.clone();
 
+    // Initialize default pipeline
+    this.defaultPipeline = new BABYLON.DefaultRenderingPipeline(
+      "defaultPipeline",
+      true,
+      this.scene,
+      [this.camera]
+    );
+
+    // Configure image processing
+    this.defaultPipeline.imageProcessing.enabled = true;
+    this.defaultPipeline.imageProcessing.exposure = 1;
+    this.defaultPipeline.imageProcessing.contrast = 1;
+
+    // Configure bloom
+    this.defaultPipeline.bloomEnabled = true;
+    this.defaultPipeline.bloomThreshold = 0.8;
+    this.defaultPipeline.bloomWeight = 0.3;
+    this.defaultPipeline.bloomKernel = 64;
+    this.defaultPipeline.bloomScale = 0.5;
+
+    // Configure FXAA
+    this.defaultPipeline.fxaaEnabled = true;
+
+    // Configure sharpening
+    this.defaultPipeline.sharpenEnabled = true;
+    this.defaultPipeline.sharpen.edgeAmount = 0.3;
+    this.defaultPipeline.sharpen.colorAmount = 1;
+
+    // Configure grain
+    this.defaultPipeline.grainEnabled = false;
+    this.defaultPipeline.grain.intensity = 10;
+    this.defaultPipeline.grain.animated = true;
+
+    // Configure chromatic aberration
+    this.defaultPipeline.chromaticAberrationEnabled = false;
+    this.defaultPipeline.chromaticAberration.aberrationAmount = 30;
+    this.defaultPipeline.chromaticAberration.radialIntensity = 1;
+
+    // Create a vertical plane that cuts through the center
+    this.clipPlanes.left = new BABYLON.Plane(1, 0, 0, 0);
+
+    // Create a horizontal plane that cuts through the center
+    this.clipPlanes.top = new BABYLON.Plane(0, 1, 0, 0);
+
+    // Log the planes for debugging
+    console.log('Initial clip planes:', {
+      vertical: { normal: [1, 0, 0], distance: 0 },
+      horizontal: { normal: [0, 1, 0], distance: 0 }
+    });
+
     window.addEventListener('resize', () => {
       this.engine.resize();
     });
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
+    // Add these as class properties so we can reference them for scaling
+    this.frameWidth = 1.6 * scale;
+    this.frameHeight = 1.0 * scale;
+    
     const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", { 
-      width: 1.6 * scale, 
-      height: 1 * scale, 
+      width: this.frameWidth, 
+      height: this.frameHeight, 
       sideOrientation: BABYLON.Mesh.DOUBLESIDE 
     }, this.scene);
     
@@ -61,6 +130,10 @@ class SceneManager {
     material.diffuseTexture = texture;
     material.backFaceCulling = false;
     
+    // Enable clipping on the material
+    material.clipPlanes = Object.values(this.clipPlanes).filter(plane => plane !== null);
+    material.forceClipPlane = true; // Add this line to force clipping
+
     // Remove specular reflection
     material.specularColor = new BABYLON.Color3(0, 0, 0);
     
@@ -125,6 +198,10 @@ class SceneManager {
   }
 
   dispose() {
+    // Add cleanup for debug planes
+    Object.values(this.debugPlanes).forEach(plane => {
+      if (plane) plane.dispose();
+    });
     this.clearFrameMeshes();
     this.scene.dispose();
     this.engine.dispose();
@@ -166,6 +243,123 @@ class SceneManager {
   // Add a method to render a single frame
   renderFrame() {
     this.scene.render();
+  }
+
+  // Add new method to update post-processing settings
+  updatePostProcessing(settings) {
+    if (!this.defaultPipeline) return;
+
+    // Update image processing
+    if (settings.exposure !== undefined) {
+      this.defaultPipeline.imageProcessing.exposure = settings.exposure;
+    }
+    if (settings.contrast !== undefined) {
+      this.defaultPipeline.imageProcessing.contrast = settings.contrast;
+    }
+
+    // Update bloom
+    if (settings.bloomEnabled !== undefined) {
+      this.defaultPipeline.bloomEnabled = settings.bloomEnabled;
+    }
+    if (settings.bloomThreshold !== undefined) {
+      this.defaultPipeline.bloomThreshold = settings.bloomThreshold;
+    }
+    if (settings.bloomWeight !== undefined) {
+      this.defaultPipeline.bloomWeight = settings.bloomWeight;
+    }
+
+    // Update sharpening
+    if (settings.sharpenEnabled !== undefined) {
+      this.defaultPipeline.sharpenEnabled = settings.sharpenEnabled;
+    }
+    if (settings.sharpenAmount !== undefined) {
+      this.defaultPipeline.sharpen.edgeAmount = settings.sharpenAmount;
+    }
+
+    // Update grain
+    if (settings.grainEnabled !== undefined) {
+      this.defaultPipeline.grainEnabled = settings.grainEnabled;
+    }
+    if (settings.grainIntensity !== undefined) {
+      this.defaultPipeline.grain.intensity = settings.grainIntensity;
+    }
+
+    // Update chromatic aberration
+    if (settings.chromaticAberrationEnabled !== undefined) {
+      this.defaultPipeline.chromaticAberrationEnabled = settings.chromaticAberrationEnabled;
+    }
+    if (settings.chromaticAberrationAmount !== undefined) {
+      this.defaultPipeline.chromaticAberration.aberrationAmount = settings.chromaticAberrationAmount;
+    }
+  }
+
+  updateClipPlanes(bounds) {
+    if (!bounds) return;
+
+    const { top, bottom, left, right } = bounds;
+    // Use the frame dimensions to scale the clip planes
+    const scaleX = this.frameWidth / 2;  // Divide by 2 because normalized coords are -1 to 1
+    const scaleY = this.frameHeight / 2;
+
+    // Dispose of existing debug planes
+    Object.values(this.debugPlanes).forEach(plane => {
+      if (plane) plane.dispose();
+    });
+
+    // Create visible debug planes
+    this.debugPlanes.left = this.createDebugPlane(new BABYLON.Color3(1, 0, 0));   // Red
+    this.debugPlanes.right = this.createDebugPlane(new BABYLON.Color3(0, 1, 0));  // Green
+    this.debugPlanes.top = this.createDebugPlane(new BABYLON.Color3(0, 0, 1));    // Blue
+    this.debugPlanes.bottom = this.createDebugPlane(new BABYLON.Color3(1, 1, 0)); // Yellow
+
+    // Position the planes using the frame dimensions for scaling
+    this.debugPlanes.left.position = new BABYLON.Vector3(scaleX * left, 0, 0);
+    this.debugPlanes.left.rotation.y = Math.PI / 2;
+    this.debugPlanes.left.scaling.y = 2; // Make the planes big enough to see
+
+    this.debugPlanes.right.position = new BABYLON.Vector3(scaleX * right, 0, 0);
+    this.debugPlanes.right.rotation.y = Math.PI / 2;
+    this.debugPlanes.right.scaling.y = 2;
+
+    this.debugPlanes.top.position = new BABYLON.Vector3(0, scaleY * top, 0);
+    this.debugPlanes.top.rotation.x = Math.PI / 2;
+    this.debugPlanes.top.scaling.y = 2;
+
+    this.debugPlanes.bottom.position = new BABYLON.Vector3(0, scaleY * bottom, 0);
+    this.debugPlanes.bottom.rotation.x = Math.PI / 2;
+    this.debugPlanes.bottom.scaling.y = 2;
+
+    // Create clipping planes using the scaled coordinates
+    this.clipPlanes.left = new BABYLON.Plane(1, 0, 0, -scaleX * left);
+    this.clipPlanes.right = new BABYLON.Plane(-1, 0, 0, scaleX * right);
+    this.clipPlanes.top = new BABYLON.Plane(0, 1, 0, -scaleY * top);
+    this.clipPlanes.bottom = new BABYLON.Plane(0, -1, 0, scaleY * bottom);
+
+    // Update all existing meshes with the new clip planes
+    this.frameMeshes.forEach(mesh => {
+      if (mesh.material) {
+        const activeClipPlanes = Object.values(this.clipPlanes).filter(plane => plane !== null);
+        mesh.material.clipPlanes = activeClipPlanes;
+        mesh.material.markAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
+      }
+    });
+
+    this.scene.markAllMaterialsAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
+  }
+
+  createDebugPlane(color) {
+    const plane = BABYLON.MeshBuilder.CreatePlane("debugPlane", { 
+      width: 30,  // Make it large enough to see
+      height: 30
+    }, this.scene);
+    
+    const material = new BABYLON.StandardMaterial("debugPlaneMaterial", this.scene);
+    material.diffuseColor = color;
+    material.alpha = 0.5; // Make it semi-transparent
+    material.backFaceCulling = false;
+    plane.material = material;
+
+    return plane;
   }
 }
 
