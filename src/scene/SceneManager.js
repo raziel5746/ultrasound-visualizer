@@ -93,14 +93,26 @@ class SceneManager {
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
-    this.frameWidth = 1.6 * scale;
-    this.frameHeight = 1.0 * scale;
-    
-    const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", { 
-      width: this.frameWidth, 
+    // Calculate aspect ratio from UV coordinates
+    if (effects.uv) {
+      // UV coordinates are in this order: [topLeftU, topLeftV, topRightU, topRightV, bottomRightU, bottomRightV, bottomLeftU, bottomLeftV]
+      const frameWidth = Math.abs(effects.uv[2] - effects.uv[0]);  // topRight.U - topLeft.U
+      const frameHeight = Math.abs(effects.uv[5] - effects.uv[1]); // bottomRight.V - topRight.V
+      const aspectRatio = frameWidth / frameHeight;
+      
+      this.frameWidth = aspectRatio * scale;
+      this.frameHeight = 1.0 * scale;
+    } else {
+      // Fallback to default aspect ratio if no UV coordinates
+      this.frameWidth = 1.6 * scale;
+      this.frameHeight = 1.0 * scale;
+    }
+
+    const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", {
+      width: this.frameWidth,
       height: this.frameHeight
     }, this.scene);
-    
+
     const material = new BABYLON.StandardMaterial("frameMaterial", this.scene);
     material.diffuseTexture = texture;
     material.backFaceCulling = false;
