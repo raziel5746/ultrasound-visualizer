@@ -3,7 +3,8 @@ import * as BABYLON from '@babylonjs/core';
 class TextureAtlas {
   constructor(scene, maxSize = 8192) {
     this.scene = scene;
-    this.maxSize = maxSize;
+    // Set maxSize based on device
+    this.maxSize = window.innerWidth <= 768 ? 4096 : maxSize;
     this.atlas = null;
     this.frames = [];
     this.uvCoordinates = [];
