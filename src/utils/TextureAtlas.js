@@ -3,7 +3,32 @@ import * as BABYLON from '@babylonjs/core';
 class TextureAtlas {
   constructor(scene, maxSize = 8192) {
     this.scene = scene;
-    this.maxSize = maxSize;
+    
+    // Get the GPU's maximum texture size with fallback
+    let maxTextureSize;
+    try {
+      const gl = scene.getEngine()._gl;
+      maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      
+      // Some devices report unrealistic values, cap it at 16384
+      maxTextureSize = Math.min(maxTextureSize, 16384);
+    } catch (error) {
+      console.warn('Could not detect maximum texture size:', error);
+      maxTextureSize = 4096; // Conservative fallback
+    }
+    
+    // Set maxSize based on device and GPU capabilities
+    const isMobile = window.innerWidth <= 768;
+    const defaultMaxSize = isMobile ? 4096 : 8192;
+    this.maxSize = Math.min(maxTextureSize, defaultMaxSize, maxSize);
+    
+    // If the texture size is very small, warn the user
+    if (this.maxSize < 2048) {
+      console.warn(`Limited texture size detected: ${this.maxSize}px. Performance may be affected.`);
+    }
+    
+    console.log(`Using maximum texture size: ${this.maxSize}px`);
+    
     this.atlas = null;
     this.frames = [];
     this.uvCoordinates = [];
@@ -11,10 +36,26 @@ class TextureAtlas {
 
   async createAtlas(frameCanvases) {
     let { width, height, scale } = this.calculateOptimalAtlasSize(frameCanvases);
+    let allFramesFit = false;
     
-    while (width > this.maxSize || height > this.maxSize) {
-      scale *= 0.9; // Reduce scale by 10%
-      ({ width, height } = this.calculateOptimalAtlasSize(frameCanvases, scale));
+    // Keep reducing scale until all frames fit
+    while (!allFramesFit) {
+      // First ensure we're within maximum texture size
+      while (width > this.maxSize || height > this.maxSize) {
+        scale *= 0.9; // Reduce scale by 10%
+        ({ width, height } = this.calculateOptimalAtlasSize(frameCanvases, scale));
+      }
+
+      // Try to pack all frames with current dimensions
+      const packingResult = this.tryPackFrames(frameCanvases, width, height, scale);
+      
+      if (packingResult.success) {
+        allFramesFit = true;
+      } else {
+        // If frames don't fit, reduce scale and try again
+        scale *= 0.9;
+        ({ width, height } = this.calculateOptimalAtlasSize(frameCanvases, scale));
+      }
     }
 
     console.log(`Creating texture atlas with size: ${width}x${height}, scale: ${scale}`);
@@ -26,6 +67,14 @@ class TextureAtlas {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
+    // Pack the frames using the successful configuration
+    this.packFrames(frameCanvases, ctx, width, height, scale);
+    
+    atlas.update(true);
+    this.atlas = atlas;
+  }
+
+  tryPackFrames(frameCanvases, width, height, scale) {
     let x = 0;
     let y = 0;
     let rowHeight = 0;
@@ -41,7 +90,36 @@ class TextureAtlas {
         rowHeight = 0;
       }
 
-      // Use drawImage with 9 arguments to scale the image
+      if (y + scaledHeight > height) {
+        return { success: false };
+      }
+
+      x += scaledWidth;
+      rowHeight = Math.max(rowHeight, scaledHeight);
+    }
+
+    return { success: true };
+  }
+
+  packFrames(frameCanvases, ctx, width, height, scale) {
+    let x = 0;
+    let y = 0;
+    let rowHeight = 0;
+
+    this.frames = [];
+    this.uvCoordinates = [];
+
+    for (let i = 0; i < frameCanvases.length; i++) {
+      const canvas = frameCanvases[i];
+      const scaledWidth = Math.floor(canvas.width * scale);
+      const scaledHeight = Math.floor(canvas.height * scale);
+
+      if (x + scaledWidth > width) {
+        x = 0;
+        y += rowHeight;
+        rowHeight = 0;
+      }
+
       ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, scaledWidth, scaledHeight);
 
       this.frames.push({
@@ -61,9 +139,6 @@ class TextureAtlas {
       x += scaledWidth;
       rowHeight = Math.max(rowHeight, scaledHeight);
     }
-
-    atlas.update(true); // Use true to update the texture with alpha
-    this.atlas = atlas;
   }
 
   calculateOptimalAtlasSize(frameCanvases, scale = 1) {
