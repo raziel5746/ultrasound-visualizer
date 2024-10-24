@@ -251,6 +251,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, [defaultValues]);
 
+  // First, define updateFrameStack
   const updateFrameStack = useCallback(() => {
     if (sceneManagerRef.current && textureAtlas) {
       sceneManagerRef.current.clearFrameMeshes();
@@ -282,10 +283,19 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
       }
     }
   }, [
-    textureAtlas, stackLength, framePercentage, opacity, brightness,
-    blendMode, isFrameOrderInverted, sliceRange, colorMap, colorMapParams
+    textureAtlas,
+    framePercentage,
+    stackLength,
+    sliceRange,
+    isFrameOrderInverted,
+    opacity,
+    brightness,
+    blendMode,
+    colorMap,
+    colorMapParams
   ]);
 
+  // Then define throttledUpdateFrameStack
   const throttledUpdateFrameStack = useMemo(() => {
     let timeoutId = null;
     return () => {
@@ -298,14 +308,43 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     };
   }, [updateFrameStack]);
 
+  // Then define handleImmediateUpdate
+  const handleImmediateUpdate = useCallback((setter) => {
+    const handler = (value) => {
+      setter(value);
+      if (textureAtlas) {
+        updateFrameStack();
+      }
+    };
+    return handler;
+  }, [textureAtlas, updateFrameStack]);
+
+  // Then define handleImmediatePostProcessingChange
+  const handleImmediatePostProcessingChange = useCallback((key) => {
+    const handler = (value) => {
+      setPostProcessing(prev => ({
+        ...prev,
+        [key]: value
+      }));
+
+      if (postProcessingUpdateTimeout.current) {
+        clearTimeout(postProcessingUpdateTimeout.current);
+      }
+
+      postProcessingUpdateTimeout.current = setTimeout(() => {
+        if (sceneManagerRef.current) {
+          sceneManagerRef.current.updatePostProcessing({
+            [key]: value
+          });
+        }
+      }, 16);
+    };
+    return handler;
+  }, []);
+
   useEffect(() => {
     throttledUpdateFrameStack();
   }, [opacity, brightness, throttledUpdateFrameStack]);
-
-  const handleImmediateUpdate = useCallback((setter) => (value) => {
-    setter(value);
-    throttledUpdateFrameStack();
-  }, [throttledUpdateFrameStack]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -412,29 +451,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
 
   // Add this near the other useRef declarations
   const postProcessingUpdateTimeout = useRef(null);
-
-  // Update the handleImmediatePostProcessingChange function
-  const handleImmediatePostProcessingChange = useCallback((key) => (value) => {
-    // Clear any pending updates
-    if (postProcessingUpdateTimeout.current) {
-      clearTimeout(postProcessingUpdateTimeout.current);
-    }
-
-    // Update the state immediately for the slider
-    setPostProcessing(prev => ({
-      ...prev,
-      [key]: value
-    }));
-
-    // Debounce the actual post-processing update
-    postProcessingUpdateTimeout.current = setTimeout(() => {
-      if (sceneManagerRef.current) {
-        sceneManagerRef.current.updatePostProcessing({
-          [key]: value
-        });
-      }
-    }, 16); // roughly one frame at 60fps
-  }, []);
 
   // Update the useEffect for post-processing
   useEffect(() => {

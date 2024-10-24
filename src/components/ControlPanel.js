@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaMagic, FaSlidersH, FaDice, FaRainbow } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
@@ -7,20 +7,43 @@ import SliceControl from './SliceControl';
 import useDebounce from '../hooks/useDebounce';
 
 const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange }) => {
+  const [isDragging, setIsDragging] = useState(false);
   const [localValue, setLocalValue] = useState(value);
-  const debouncedValue = useDebounce(localValue, 16); // 60fps = ~16ms
+  const debouncedValue = useDebounce(localValue, 16);
+  const lastImmediateValue = useRef(value);
 
-  // Update local value when prop value changes
+  // Only update local value from props when not dragging
   useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+    if (!isDragging) {
+      setLocalValue(value);
+      lastImmediateValue.current = value;
+    }
+  }, [value, isDragging]);
 
   // Apply debounced value
   useEffect(() => {
-    if (debouncedValue !== value) {
+    if (isDragging && Math.abs(debouncedValue - lastImmediateValue.current) > Number.EPSILON) {
+      lastImmediateValue.current = debouncedValue;
       onChange(debouncedValue);
     }
-  }, [debouncedValue, onChange, value]);
+  }, [debouncedValue, onChange, isDragging]);
+
+  const handleChange = (e) => {
+    const newValue = parseFloat(e.target.value);
+    setLocalValue(newValue);
+    lastImmediateValue.current = newValue;
+    if (onImmediateChange) {
+      onImmediateChange(newValue);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    // Only update if the value has changed
+    if (Math.abs(localValue - value) > Number.EPSILON) {
+      onChange(localValue);
+    }
+  };
 
   return (
     <div style={{ marginBottom: '15px' }}>
@@ -35,13 +58,12 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
           max={max}
           step={step}
           value={localValue}
-          onChange={(e) => {
-            const newValue = parseFloat(e.target.value);
-            setLocalValue(newValue);
-            if (onImmediateChange) {
-              onImmediateChange(newValue);
-            }
-          }}
+          onChange={handleChange}
+          onMouseDown={() => setIsDragging(true)}
+          onMouseUp={handleDragEnd}
+          onTouchStart={() => setIsDragging(true)}
+          onTouchEnd={handleDragEnd}
+          onMouseLeave={handleDragEnd}
           style={{ flex: 1, marginRight: '10px' }}
         />
         <span style={{ minWidth: '50px', textAlign: 'right' }}>
