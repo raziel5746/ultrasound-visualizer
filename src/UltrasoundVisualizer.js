@@ -8,6 +8,7 @@ import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
 import SliceControl from './components/SliceControl';
 import { ControlGroup } from './components/ControlPanel';
+import debounce from 'lodash/debounce';
 
 const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const canvasRef = useRef(null);
@@ -89,16 +90,74 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, [videoUrl]);
 
+  // Move updateFrameStack definition before its first use
+  // Add this before the useEffect that uses it (around line 138)
+
+  // Modify updateFrameStack to apply opacity after creating meshes
+  const updateFrameStack = useCallback(() => {
+    if (sceneManagerRef.current && textureAtlas) {
+      sceneManagerRef.current.clearFrameMeshes();
+      const framesToShow = Math.max(2, Math.floor(textureAtlas.frames.length * (framePercentage / 100)));
+      setRenderedFrames(framesToShow);
+      
+      const scale = 15;
+      const actualFrameDistance = (stackLength / (framesToShow - 1)) * 1.5 * scale;
+      const totalStackLength = (framesToShow - 1) * actualFrameDistance;
+      const offset = totalStackLength / 2;
+
+      const [startPercentage, endPercentage] = sliceRange;
+      const startIndex = Math.floor(startPercentage / 100 * framesToShow);
+      const endIndex = Math.ceil(endPercentage / 100 * framesToShow);
+
+      for (let i = startIndex; i < endIndex; i++) {
+        const frameIndex = isFrameOrderInverted
+          ? textureAtlas.frames.length - 1 - Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1)
+          : Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1);
+        const position = new BABYLON.Vector3(0, 0, i * actualFrameDistance - offset);
+        
+        sceneManagerRef.current.createFrameMesh(textureAtlas.atlas, position, scale, {
+          brightness,
+          blendMode,
+          uv: textureAtlas.getFrameUV(frameIndex),
+          colorMap: (value) => ColorMaps[colorMap].map(value, colorMapParams)
+        });
+      }
+
+      // Apply opacity after creating all meshes
+      sceneManagerRef.current.updateMeshOpacity(opacity);
+
+      // Reapply the current clipping planes
+      sceneManagerRef.current.updateClipPlanes(currentClipBounds.current);
+    }
+  }, [
+    textureAtlas,
+    framePercentage,
+    stackLength,
+    sliceRange,
+    isFrameOrderInverted,
+    opacity,
+    brightness,
+    blendMode,
+    colorMap,
+    colorMapParams
+  ]);
+
+  // Then move the useEffect that uses it after the definition
   useEffect(() => {
     if (canvasRef.current) {
-      sceneManagerRef.current = new SceneManager(canvasRef.current);
-      sceneManagerRef.current.initialize();
-      // Remove this line:
-      // sceneManagerRef.current.setupClippingPlane(); 
+      // Only create a new scene manager if one doesn't exist
+      if (!sceneManagerRef.current) {
+        sceneManagerRef.current = new SceneManager(canvasRef.current);
+        sceneManagerRef.current.initialize();
+        sceneManagerRef.current.setBackgroundColor(backgroundColor);
+        sceneManagerRef.current.setGlobalLightIntensity(globalLightIntensity);
+      }
 
       const renderLoop = (time) => {
         if (time - lastRenderTime.current >= 1000 / targetFps) {
-          sceneManagerRef.current.renderFrame();
+          if (sceneManagerRef.current) {
+            sceneManagerRef.current.renderFrame();
+          }
           lastRenderTime.current = time;
         }
         animationFrameId.current = requestAnimationFrame(renderLoop);
@@ -106,14 +165,23 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
 
       animationFrameId.current = requestAnimationFrame(renderLoop);
 
+      // Cleanup only when component unmounts
       return () => {
         cancelAnimationFrame(animationFrameId.current);
-        if (sceneManagerRef.current) {
-          sceneManagerRef.current.dispose();
-        }
       };
     }
-  }, [targetFps]);
+  }, [targetFps, backgroundColor, globalLightIntensity]); // Add missing dependencies
+
+  // Add a separate cleanup effect
+  useEffect(() => {
+    return () => {
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.clearFrameMeshes();
+        sceneManagerRef.current.dispose();
+        sceneManagerRef.current = null;
+      }
+    };
+  }, []); // Empty dependency array for cleanup on unmount only
 
   useEffect(() => {
     if (sceneManagerRef.current) {
@@ -267,55 +335,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, []);
 
-  // Modify updateFrameStack to apply opacity after creating meshes
-  const updateFrameStack = useCallback(() => {
-    if (sceneManagerRef.current && textureAtlas) {
-      sceneManagerRef.current.clearFrameMeshes();
-      const framesToShow = Math.max(2, Math.floor(textureAtlas.frames.length * (framePercentage / 100)));
-      setRenderedFrames(framesToShow);
-      
-      const scale = 15;
-      const actualFrameDistance = (stackLength / (framesToShow - 1)) * 1.5 * scale;
-      const totalStackLength = (framesToShow - 1) * actualFrameDistance;
-      const offset = totalStackLength / 2;
-
-      const [startPercentage, endPercentage] = sliceRange;
-      const startIndex = Math.floor(startPercentage / 100 * framesToShow);
-      const endIndex = Math.ceil(endPercentage / 100 * framesToShow);
-
-      for (let i = startIndex; i < endIndex; i++) {
-        const frameIndex = isFrameOrderInverted
-          ? textureAtlas.frames.length - 1 - Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1)
-          : Math.min(Math.floor(i * (textureAtlas.frames.length - 1) / (framesToShow - 1)), textureAtlas.frames.length - 1);
-        const position = new BABYLON.Vector3(0, 0, i * actualFrameDistance - offset);
-        
-        sceneManagerRef.current.createFrameMesh(textureAtlas.atlas, position, scale, {
-          brightness,
-          blendMode,
-          uv: textureAtlas.getFrameUV(frameIndex),
-          colorMap: (value) => ColorMaps[colorMap].map(value, colorMapParams)
-        });
-      }
-
-      // Apply opacity after creating all meshes
-      sceneManagerRef.current.updateMeshOpacity(opacity);
-
-      // Reapply the current clipping planes
-      sceneManagerRef.current.updateClipPlanes(currentClipBounds.current);
-    }
-  }, [
-    textureAtlas,
-    framePercentage,
-    stackLength,
-    sliceRange,
-    isFrameOrderInverted,
-    opacity,
-    brightness,
-    blendMode,
-    colorMap,
-    colorMapParams
-  ]);
-
   // Add these refs near the top with other refs
   const updateFrameStackScheduled = useRef(false);
   const lastUpdateTime = useRef(0);
@@ -406,19 +425,51 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
       setTargetFps(isMobileDevice ? 30 : 60);
 
       if (sceneManagerRef.current) {
-        sceneManagerRef.current.engine.resize();
-        sceneManagerRef.current.setBackgroundColor(backgroundColor);
-        updateFrameStack();
+        // Store camera state before resize
+        const cameraState = sceneManagerRef.current.camera ? {
+          position: sceneManagerRef.current.camera.position.clone(),
+          target: sceneManagerRef.current.camera.target.clone(),
+          radius: sceneManagerRef.current.camera.radius,
+          alpha: sceneManagerRef.current.camera.alpha,
+          beta: sceneManagerRef.current.camera.beta
+        } : null;
+
+        // Don't clear meshes before resize
+        sceneManagerRef.current.engine.resize(true);
+
+        // Wait for next frame to ensure resize is complete
+        requestAnimationFrame(() => {
+          if (cameraState) {
+            // Restore camera state
+            sceneManagerRef.current.camera.position = cameraState.position;
+            sceneManagerRef.current.camera.target = cameraState.target;
+            sceneManagerRef.current.camera.radius = cameraState.radius;
+            sceneManagerRef.current.camera.alpha = cameraState.alpha;
+            sceneManagerRef.current.camera.beta = cameraState.beta;
+          }
+
+          // Update scene properties
+          sceneManagerRef.current.setBackgroundColor(backgroundColor);
+          
+          // Only rebuild frame stack if needed
+          if (textureAtlas && !sceneManagerRef.current.hasMeshes()) {
+            updateFrameStack();
+          }
+        });
       }
     };
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
+    // Add debouncing to prevent multiple rapid resizes
+    const debouncedResize = debounce(handleResize, 250);
+
+    handleResize(); // Initial resize
+    window.addEventListener('resize', debouncedResize);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', debouncedResize);
+      debouncedResize.cancel();
     };
-  }, [updateFrameStack, backgroundColor]);
+  }, [updateFrameStack, backgroundColor, textureAtlas]);
 
   useEffect(() => {
     if (textureAtlas) {

@@ -314,6 +314,10 @@ class SceneManager {
       }
     });
   }
+
+  hasMeshes() {
+    return this.scene.meshes.length > 0;
+  }
 }
 
 export default SceneManager;
