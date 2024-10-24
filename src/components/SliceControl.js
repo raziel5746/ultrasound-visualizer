@@ -112,7 +112,8 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
       { x: (left + right) / 2, y: top, type: 'top' },
       { x: right, y: (top + bottom) / 2, type: 'right' },
       { x: (left + right) / 2, y: bottom, type: 'bottom' },
-      { x: left, y: (top + bottom) / 2, type: 'left' }
+      { x: left, y: (top + bottom) / 2, type: 'left' },
+      { x: (left + right) / 2, y: (top + bottom) / 2, type: 'center' }  // Add center handle
     ];
   }, [rectangle]);
 
@@ -172,7 +173,8 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
               topleft: 'nwse-resize',
               bottomright: 'nwse-resize',
               topright: 'nesw-resize',
-              bottomleft: 'nesw-resize'
+              bottomleft: 'nesw-resize',
+              center: 'move'  // Add cursor type for center handle
             }[handle.type] || 'grab';
             
             canvasRef.current.style.cursor = cursorType;
@@ -213,50 +215,56 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           const top = Math.min(originalRect.y, originalRect.y + originalRect.height);
           const bottom = Math.max(originalRect.y, originalRect.y + originalRect.height);
 
-          // Handle corner dragging
-          switch (handleType) {
-            case 'topleft':
-              newRect.x = left + dx;
-              newRect.y = top + dy;
-              newRect.width = right - newRect.x;
-              newRect.height = bottom - newRect.y;
-              break;
-            case 'topright':
-              newRect.width = (right + dx) - left;
-              newRect.x = left;
-              newRect.y = top + dy;
-              newRect.height = bottom - newRect.y;
-              break;
-            case 'bottomright':
-              newRect.width = (right + dx) - left;
-              newRect.x = left;
-              newRect.height = (bottom + dy) - top;
-              newRect.y = top;
-              break;
-            case 'bottomleft':
-              newRect.x = left + dx;
-              newRect.width = right - newRect.x;
-              newRect.height = (bottom + dy) - top;
-              newRect.y = top;
-              break;
-            case 'top':
-              newRect.y = top + dy;
-              newRect.height = bottom - newRect.y;
-              break;
-            case 'right':
-              newRect.width = (right + dx) - left;
-              newRect.x = left;
-              break;
-            case 'bottom':
-              newRect.height = (bottom + dy) - top;
-              newRect.y = top;
-              break;
-            case 'left':
-              newRect.x = left + dx;
-              newRect.width = right - newRect.x;
-              break;
-            default:
-              break;
+          // Handle center dragging
+          if (handleType === 'center') {
+            newRect.x = originalRect.x + dx;
+            newRect.y = originalRect.y + dy;
+          } else {
+            // Handle corner dragging
+            switch (handleType) {
+              case 'topleft':
+                newRect.x = left + dx;
+                newRect.y = top + dy;
+                newRect.width = right - newRect.x;
+                newRect.height = bottom - newRect.y;
+                break;
+              case 'topright':
+                newRect.width = (right + dx) - left;
+                newRect.x = left;
+                newRect.y = top + dy;
+                newRect.height = bottom - newRect.y;
+                break;
+              case 'bottomright':
+                newRect.width = (right + dx) - left;
+                newRect.x = left;
+                newRect.height = (bottom + dy) - top;
+                newRect.y = top;
+                break;
+              case 'bottomleft':
+                newRect.x = left + dx;
+                newRect.width = right - newRect.x;
+                newRect.height = (bottom + dy) - top;
+                newRect.y = top;
+                break;
+              case 'top':
+                newRect.y = top + dy;
+                newRect.height = bottom - newRect.y;
+                break;
+              case 'right':
+                newRect.width = (right + dx) - left;
+                newRect.x = left;
+                break;
+              case 'bottom':
+                newRect.height = (bottom + dy) - top;
+                newRect.y = top;
+                break;
+              case 'left':
+                newRect.x = left + dx;
+                newRect.width = right - newRect.x;
+                break;
+              default:
+                break;
+            }
           }
 
           // Ensure width and height are never negative
@@ -377,7 +385,9 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         ctx.fillStyle = '#3498db';
         rectangleState.handles.forEach(handle => {
           ctx.beginPath();
-          ctx.arc(handle.x, handle.y, 5, 0, Math.PI * 2);
+          // Make center handle slightly larger
+          const radius = handle.type === 'center' ? 6 : 5;
+          ctx.arc(handle.x, handle.y, radius, 0, Math.PI * 2);
           ctx.fill();
         });
       }
@@ -529,6 +539,55 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     updateClipPlanes(guideRect);
   }, [getFrameGuideRect, updateClipPlanes]); // Only run on mount and if frame guide rect changes
 
+  // Add touch event handlers and modify existing mouse handlers
+  const handleTouchStart = (e) => {
+    e.preventDefault(); // Prevent scrolling while dragging
+    const touch = e.touches[0];
+    const { x, y } = getCanvasCoordinates(touch.clientX, touch.clientY);
+
+    if (rectangle) {
+      const handles = getHandles();
+      const handle = handles.find(h => 
+        Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
+      );
+
+      if (handle) {
+        setIsDragging(true);
+        initialHandleType.current = handle.type;
+        setDragStart({
+          x,
+          y,
+          originalRect: { ...rectangle }
+        });
+        return;
+      }
+    }
+
+    setIsDrawing(true);
+    setRectangle({
+      x,
+      y,
+      width: 0,
+      height: 0
+    });
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault(); // Prevent scrolling while dragging
+    const touch = e.touches[0];
+    
+    // Reuse existing mouse move logic with touch coordinates
+    handleMouseMove({
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+  };
+
+  const handleTouchEnd = () => {
+    handleMouseUp();
+  };
+
+  // Update the canvas element to include touch events
   return (
     <div>
       <div style={{ 
@@ -562,10 +621,15 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         style={{
           background: '#222',
           border: '1px solid #444',
-          borderRadius: '4px'
+          borderRadius: '4px',
+          touchAction: 'none' // Prevent default touch actions like scrolling
         }}
       />
       {showSliders && renderSliders()}
