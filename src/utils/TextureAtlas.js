@@ -3,8 +3,32 @@ import * as BABYLON from '@babylonjs/core';
 class TextureAtlas {
   constructor(scene, maxSize = 8192) {
     this.scene = scene;
-    // Set maxSize based on device
-    this.maxSize = window.innerWidth <= 768 ? 4096 : maxSize;
+    
+    // Get the GPU's maximum texture size with fallback
+    let maxTextureSize;
+    try {
+      const gl = scene.getEngine()._gl;
+      maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      
+      // Some devices report unrealistic values, cap it at 16384
+      maxTextureSize = Math.min(maxTextureSize, 16384);
+    } catch (error) {
+      console.warn('Could not detect maximum texture size:', error);
+      maxTextureSize = 4096; // Conservative fallback
+    }
+    
+    // Set maxSize based on device and GPU capabilities
+    const isMobile = window.innerWidth <= 768;
+    const defaultMaxSize = isMobile ? 4096 : 8192;
+    this.maxSize = Math.min(maxTextureSize, defaultMaxSize, maxSize);
+    
+    // If the texture size is very small, warn the user
+    if (this.maxSize < 2048) {
+      console.warn(`Limited texture size detected: ${this.maxSize}px. Performance may be affected.`);
+    }
+    
+    console.log(`Using maximum texture size: ${this.maxSize}px`);
+    
     this.atlas = null;
     this.frames = [];
     this.uvCoordinates = [];
