@@ -123,10 +123,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         });
       }
 
-      // Apply opacity after creating all meshes
       sceneManagerRef.current.updateMeshOpacity(opacity);
-
-      // Reapply the current clipping planes
       sceneManagerRef.current.updateClipPlanes(currentClipBounds.current);
     }
   }, [
@@ -243,6 +240,13 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   useEffect(() => {
     if (!videoUrl) {
       setError('No video URL provided');
+      setIsLocalLoading(false);
+      return;
+    }
+
+    // Check for WebGL support
+    if (!window.WebGLRenderingContext) {
+      setError('WebGL is not supported on this device.');
       setIsLocalLoading(false);
       return;
     }

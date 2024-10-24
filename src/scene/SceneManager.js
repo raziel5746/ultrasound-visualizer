@@ -98,8 +98,7 @@ class SceneManager {
     
     const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", { 
       width: this.frameWidth, 
-      height: this.frameHeight, 
-      sideOrientation: BABYLON.Mesh.DOUBLESIDE 
+      height: this.frameHeight
     }, this.scene);
     
     const material = new BABYLON.StandardMaterial("frameMaterial", this.scene);
@@ -113,10 +112,6 @@ class SceneManager {
     material.useAlphaFromDiffuseTexture = true;
 
     // Apply effects
-    // Remove this line since we'll use updateMeshOpacity instead
-    // material.alpha = effects.opacity || 1;
-    
-    // Apply brightness and color mapping
     const brightness = effects.brightness;
     if (effects.colorMap) {
       const colors = effects.colorMap(brightness);
