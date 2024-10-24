@@ -113,7 +113,8 @@ class SceneManager {
     material.useAlphaFromDiffuseTexture = true;
 
     // Apply effects
-    material.alpha = effects.opacity || 1;
+    // Remove this line since we'll use updateMeshOpacity instead
+    // material.alpha = effects.opacity || 1;
     
     // Apply brightness and color mapping
     const brightness = effects.brightness;
@@ -291,6 +292,27 @@ class SceneManager {
 
     this.scene.markAllMaterialsAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
     this.scene.markAllMaterialsAsDirty(BABYLON.Material.AllDirtyFlag);
+  }
+
+  updateMeshOpacity(opacity) {
+    this.frameMeshes.forEach(mesh => {
+      if (mesh.material) {
+        mesh.material.alpha = opacity;
+      }
+    });
+  }
+
+  updateMeshBrightness(brightness, colorMap) {
+    this.frameMeshes.forEach(mesh => {
+      if (mesh.material) {
+        if (colorMap) {
+          const colors = colorMap(brightness);
+          mesh.material.diffuseColor = new BABYLON.Color3(colors.r, colors.g, colors.b);
+        } else {
+          mesh.material.diffuseColor = new BABYLON.Color3(brightness, brightness, brightness);
+        }
+      }
+    });
   }
 }
 

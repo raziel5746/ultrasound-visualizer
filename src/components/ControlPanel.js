@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaMagic, FaSlidersH, FaDice, FaRainbow } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
@@ -11,6 +11,8 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
   const [localValue, setLocalValue] = useState(value);
   const debouncedValue = useDebounce(localValue, 16);
   const lastImmediateValue = useRef(value);
+  const lastUpdateTime = useRef(0);
+  const updateScheduled = useRef(false);
 
   // Only update local value from props when not dragging
   useEffect(() => {
@@ -28,20 +30,36 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
     }
   }, [debouncedValue, onChange, isDragging]);
 
+  const scheduleUpdate = useCallback((newValue) => {
+    if (!updateScheduled.current) {
+      updateScheduled.current = true;
+      requestAnimationFrame(() => {
+        const now = performance.now();
+        if (now - lastUpdateTime.current >= 16) {
+          if (onImmediateChange) {
+            onImmediateChange(newValue);
+          }
+          lastUpdateTime.current = now;
+        }
+        updateScheduled.current = false;
+      });
+    }
+  }, [onImmediateChange]);
+
   const handleChange = (e) => {
     const newValue = parseFloat(e.target.value);
     setLocalValue(newValue);
     lastImmediateValue.current = newValue;
-    if (onImmediateChange) {
-      onImmediateChange(newValue);
-    }
+    scheduleUpdate(newValue);
   };
 
   const handleDragEnd = () => {
     setIsDragging(false);
-    // Only update if the value has changed
     if (Math.abs(localValue - value) > Number.EPSILON) {
       onChange(localValue);
+      if (onImmediateChange) {
+        onImmediateChange(localValue);
+      }
     }
   };
 
@@ -176,12 +194,16 @@ const ControlPanel = ({
   onImmediateBrightnessChange,
   onImmediateGlobalLightChange,
   onImmediatePostProcessingChange,
+  onImmediateStackLengthChange,     // Added
+  onImmediateFramePercentageChange, // Added
+  onImmediateSlicePositionChange,   // Added
   globalLightIntensity, setGlobalLightIntensity,
   colorMap, setColorMap,
   colorMapParams, setColorMapParams,
   postProcessing = {},
   setPostProcessing,
-  onClipPlanesChange, // Add this prop
+  onClipPlanesChange,
+  children
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -413,6 +435,7 @@ const ControlPanel = ({
                   max={3}
                   step={0.01}
                   onChange={setStackLength}
+                  onImmediateChange={onImmediateStackLengthChange}
                 />
                 <ControlItem
                   icon={<FaImages />}
@@ -422,6 +445,7 @@ const ControlPanel = ({
                   max={100}
                   step={0.1}
                   onChange={setFramePercentage}
+                  onImmediateChange={onImmediateFramePercentageChange}
                   unit="%"
                 />
                 <RangeSlider
@@ -439,6 +463,7 @@ const ControlPanel = ({
                   max={100 - (sliceRange[1] - sliceRange[0])}
                   step={1}
                   onChange={handleSlicePositionChange}
+                  onImmediateChange={onImmediateSlicePositionChange}
                   unit="%"
                 />
               </ControlGroup>

@@ -6,15 +6,30 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [rectangle, setRectangle] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragHandle, setDragHandle] = useState(null);
   const [dragStart, setDragStart] = useState(null);
   const [showSliders, setShowSliders] = useState(false);
   const [debouncedRectangle, setDebouncedRectangle] = useState(null);
+  const initialHandleType = useRef(null);
+  const lastNormalizedBounds = useRef({
+    left: -1,
+    right: 1,
+    top: 1,
+    bottom: -1
+  });
 
   // Add frame aspect ratio constant
   const FRAME_ASPECT_RATIO = 1.6;
 
-  // Move getFrameGuideRect before its first use
+  // Add function to get canvas coordinates
+  const getCanvasCoordinates = useCallback((clientX, clientY) => {
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: (clientX - canvasRect.left) * (width / canvasRect.width),
+      y: (clientY - canvasRect.top) * (height / canvasRect.height)
+    };
+  }, [width, height]);
+
+  // First, define getFrameGuideRect
   const getFrameGuideRect = useCallback(() => {
     const margin = 0.1;
     const availableWidth = width * (1 - 2 * margin);
@@ -41,7 +56,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     };
   }, [width, height]);
 
-  // Wrap normalizeCoords in useCallback
+  // Second, define normalizeCoords
   const normalizeCoords = useCallback((x, y) => {
     const guideRect = getFrameGuideRect();
     
@@ -54,6 +69,27 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     };
   }, [getFrameGuideRect]);
 
+  // Third, define updateClipPlanes
+  const updateClipPlanes = useCallback((rect) => {
+    if (!rect) return;
+
+    const x1 = rect.x;
+    const x2 = rect.x + rect.width;
+    const y1 = rect.y;
+    const y2 = rect.y + rect.height;
+
+    const normalized = {
+      left: normalizeCoords(Math.min(x1, x2), 0).x,
+      right: normalizeCoords(Math.max(x1, x2), 0).x,
+      top: normalizeCoords(0, Math.min(y1, y2)).y,
+      bottom: normalizeCoords(0, Math.max(y1, y2)).y
+    };
+
+    lastNormalizedBounds.current = normalized;
+    onClipPlanesChange(normalized);
+  }, [normalizeCoords, onClipPlanesChange]);
+
+  // Fourth, define getHandles
   const getHandles = useCallback(() => {
     if (!rectangle) return [];
 
@@ -62,23 +98,16 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     const y1 = rectangle.y;
     const y2 = rectangle.y + rectangle.height;
 
-    // Calculate actual positions
     const left = Math.min(x1, x2);
     const right = Math.max(x1, x2);
     const top = Math.min(y1, y2);
     const bottom = Math.max(y1, y2);
 
-    // Determine handle types based on their actual positions in space
     return [
-      // Top-left corner is always the leftmost and topmost point
       { x: left, y: top, type: 'topleft' },
-      // Top-right corner is always the rightmost and topmost point
       { x: right, y: top, type: 'topright' },
-      // Bottom-right corner is always the rightmost and bottommost point
       { x: right, y: bottom, type: 'bottomright' },
-      // Bottom-left corner is always the leftmost and bottommost point
       { x: left, y: bottom, type: 'bottomleft' },
-      // Edge midpoints
       { x: (left + right) / 2, y: top, type: 'top' },
       { x: right, y: (top + bottom) / 2, type: 'right' },
       { x: (left + right) / 2, y: bottom, type: 'bottom' },
@@ -88,11 +117,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
   const handleMouseMove = (e) => {
     if (!isDrawing && !isDragging) {
-      const canvasRect = canvasRef.current.getBoundingClientRect();
-      const scaleX = width / canvasRect.width;
-      const scaleY = height / canvasRect.height;
-      const x = (e.clientX - canvasRect.left) * scaleX;
-      const y = (e.clientY - canvasRect.top) * scaleY;
+      const { x, y } = getCanvasCoordinates(e.clientX, e.clientY);
 
       if (rectangle) {
         const handles = getHandles();
@@ -128,69 +153,44 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
       return;
     }
 
-    // When dragging, use the grabbing cursor
-    if (isDragging) {
-      canvasRef.current.style.cursor = 'grabbing';
-    }
-
-    // Get the canvas's bounding rectangle once
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    
-    // Calculate the scale factors between canvas coordinates and CSS pixels
-    const scaleX = width / canvasRect.width;
-    const scaleY = height / canvasRect.height;
-    
-    // Get precise coordinates
-    const x = (e.clientX - canvasRect.left) * scaleX;
-    const y = (e.clientY - canvasRect.top) * scaleY;
+    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY);
 
     if (isDrawing) {
-      // Allow free drawing - no restrictions
-      setRectangle(prev => ({
-        ...prev,
-        width: x - prev.x,
-        height: y - prev.y
-      }));
-    } else if (isDragging) {
-      // Calculate the drag distance without applying scale again
-      const dx = (e.clientX - canvasRect.left) * scaleX - dragStart.x;
-      const dy = (e.clientY - canvasRect.top) * scaleY - dragStart.y;
-
       setRectangle(prev => {
-        const x1 = prev.x;
-        const x2 = prev.x + prev.width;
-        const y1 = prev.y;
-        const y2 = prev.y + prev.height;
-
-        // Determine which point we're actually dragging based on position
-        const isLeft = Math.abs(x1 - dragStart.x) < Math.abs(x2 - dragStart.x);
-        const isTop = Math.abs(y1 - dragStart.y) < Math.abs(y2 - dragStart.y);
-
-        const newRect = { ...prev };
-
-        // Handle corner and edge dragging based on actual position
-        if (dragHandle.includes('left') || dragHandle.includes('right')) {
-          if (isLeft) {
-            newRect.x += dx;
-            newRect.width -= dx;
-          } else {
-            newRect.width += dx;
-          }
-        }
-
-        if (dragHandle.includes('top') || dragHandle.includes('bottom')) {
-          if (isTop) {
-            newRect.y += dy;
-            newRect.height -= dy;
-          } else {
-            newRect.height += dy;
-          }
-        }
-
+        const newRect = {
+          ...prev,
+          width: x - prev.x,
+          height: y - prev.y
+        };
+        updateClipPlanes(newRect);
         return newRect;
       });
-      
-      setDragStart({ x, y });
+    } else if (isDragging) {
+      const dx = x - dragStart.x;
+      const dy = y - dragStart.y;
+
+      setRectangle(prev => {
+        const newRect = { ...prev };
+        const handleType = initialHandleType.current || '';
+
+        // Simple direct movement based on handle type
+        if (handleType.includes('left')) {
+          newRect.x = dragStart.originalRect.x + dx;
+          newRect.width = dragStart.originalRect.width - dx;
+        } else if (handleType.includes('right')) {
+          newRect.width = dragStart.originalRect.width + dx;
+        }
+
+        if (handleType.includes('top')) {
+          newRect.y = dragStart.originalRect.y + dy;
+          newRect.height = dragStart.originalRect.height - dy;
+        } else if (handleType.includes('bottom')) {
+          newRect.height = dragStart.originalRect.height + dy;
+        }
+
+        updateClipPlanes(newRect);
+        return newRect;
+      });
     }
 
     // Convert rectangle to clip planes based on actual positions, not drawing order
@@ -213,14 +213,9 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
   };
 
   const handleMouseDown = (e) => {
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const scaleX = width / canvasRect.width;
-    const scaleY = height / canvasRect.height;
-    const x = (e.clientX - canvasRect.left) * scaleX;
-    const y = (e.clientY - canvasRect.top) * scaleY;
+    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY);
 
     if (rectangle) {
-      // Check if clicking on a handle
       const handles = getHandles();
       const handle = handles.find(h => 
         Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
@@ -228,9 +223,13 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
       if (handle) {
         setIsDragging(true);
-        setDragHandle(handle.type);
-        setDragStart({ x, y });
-        canvasRef.current.style.cursor = 'grabbing';  // Change to grabbing when dragging
+        initialHandleType.current = handle.type;
+        setDragStart({
+          x,
+          y,
+          originalRect: { ...rectangle }  // Store the initial rectangle state
+        });
+        canvasRef.current.style.cursor = 'grabbing';
         return;
       }
     }
@@ -248,14 +247,15 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
   const handleMouseUp = () => {
     setIsDrawing(false);
     setIsDragging(false);
-    setDragHandle(null);
+    initialHandleType.current = null;
     canvasRef.current.style.cursor = 'default';
   };
 
   useEffect(() => {
     const guideRect = getFrameGuideRect();
     setRectangle(guideRect);
-  }, [getFrameGuideRect]);
+    updateClipPlanes(guideRect);
+  }, [getFrameGuideRect, updateClipPlanes]);
 
   useEffect(() => {
     const draw = () => {
@@ -317,13 +317,8 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
   const handleReset = useCallback(() => {
     const guideRect = getFrameGuideRect();
     setRectangle(guideRect);
-    onClipPlanesChange({
-      left: -1,
-      right: 1,
-      top: 1,
-      bottom: -1
-    });
-  }, [getFrameGuideRect, onClipPlanesChange]);
+    updateClipPlanes(guideRect);
+  }, [getFrameGuideRect, updateClipPlanes]);
 
   // Update clip planes when debounced rectangle changes
   useEffect(() => {
@@ -349,7 +344,28 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     setDebouncedRectangle(rectangle);
   }, [rectangle]);
 
-  // Modify slider onChange handlers to use debouncing
+  // Add a flag to track slider updates
+  const isSliderUpdating = useRef(false);
+
+  // Modify the effect that updates clip planes
+  useEffect(() => {
+    if (rectangle && !isDrawing && !isDragging && !isSliderUpdating.current) {
+      updateClipPlanes(rectangle);
+    }
+  }, [rectangle, isDrawing, isDragging, updateClipPlanes]);
+
+  const handleSliderChange = (updateFn) => {
+    isSliderUpdating.current = true;
+    updateFn();
+    // Use RAF to ensure we complete the current update cycle
+    requestAnimationFrame(() => {
+      isSliderUpdating.current = false;
+      if (rectangle) {
+        updateClipPlanes(rectangle);
+      }
+    });
+  };
+
   const renderSliders = () => (
     <div style={{
       marginTop: '10px',
@@ -367,11 +383,13 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           value={rectangle?.x || 0}
           onChange={(e) => {
             const newX = parseFloat(e.target.value);
-            setRectangle(prev => ({
-              ...prev,
-              width: (prev.x + prev.width) - newX,
-              x: newX
-            }));
+            handleSliderChange(() => {
+              setRectangle(prev => ({
+                ...prev,
+                width: (prev.x + prev.width) - newX,
+                x: newX
+              }));
+            });
           }}
           style={{ width: '100%' }}
         />
@@ -385,21 +403,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           value={(rectangle?.x || 0) + (rectangle?.width || 0)}
           onChange={(e) => {
             const newRight = parseFloat(e.target.value);
-            setRectangle(prev => {
-              const newRect = {
+            handleSliderChange(() => {
+              setRectangle(prev => ({
                 ...prev,
                 width: newRight - prev.x
-              };
-              
-              // Update clip planes
-              onClipPlanesChange({
-                left: normalizeCoords(Math.min(newRect.x, newRect.x + newRect.width), 0).x,
-                right: normalizeCoords(Math.max(newRect.x, newRect.x + newRect.width), 0).x,
-                top: normalizeCoords(0, Math.min(newRect.y, newRect.y + newRect.height)).y,
-                bottom: normalizeCoords(0, Math.max(newRect.y, newRect.y + newRect.height)).y
-              });
-              
-              return newRect;
+              }));
             });
           }}
           style={{ width: '100%' }}
@@ -414,22 +422,12 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           value={rectangle?.y || 0}
           onChange={(e) => {
             const newY = parseFloat(e.target.value);
-            setRectangle(prev => {
-              const newRect = {
+            handleSliderChange(() => {
+              setRectangle(prev => ({
                 ...prev,
                 height: (prev.y + prev.height) - newY,
                 y: newY
-              };
-              
-              // Update clip planes
-              onClipPlanesChange({
-                left: normalizeCoords(Math.min(newRect.x, newRect.x + newRect.width), 0).x,
-                right: normalizeCoords(Math.max(newRect.x, newRect.x + newRect.width), 0).x,
-                top: normalizeCoords(0, Math.min(newRect.y, newRect.y + newRect.height)).y,
-                bottom: normalizeCoords(0, Math.max(newRect.y, newRect.y + newRect.height)).y
-              });
-              
-              return newRect;
+              }));
             });
           }}
           style={{ width: '100%' }}
@@ -444,21 +442,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           value={(rectangle?.y || 0) + (rectangle?.height || 0)}
           onChange={(e) => {
             const newBottom = parseFloat(e.target.value);
-            setRectangle(prev => {
-              const newRect = {
+            handleSliderChange(() => {
+              setRectangle(prev => ({
                 ...prev,
                 height: newBottom - prev.y
-              };
-              
-              // Update clip planes
-              onClipPlanesChange({
-                left: normalizeCoords(Math.min(newRect.x, newRect.x + newRect.width), 0).x,
-                right: normalizeCoords(Math.max(newRect.x, newRect.x + newRect.width), 0).x,
-                top: normalizeCoords(0, Math.min(newRect.y, newRect.y + newRect.height)).y,
-                bottom: normalizeCoords(0, Math.max(newRect.y, newRect.y + newRect.height)).y
-              });
-              
-              return newRect;
+              }));
             });
           }}
           style={{ width: '100%' }}
