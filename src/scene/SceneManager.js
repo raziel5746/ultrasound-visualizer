@@ -10,6 +10,10 @@ class SceneManager {
     this.light = null;
     this.globalLight = null;
     this.renderLoop = null;
+    this.defaultPipeline = null;
+    this.postProcesses = {};
+    this.frameWidth = null;
+    this.frameHeight = null;
   }
 
   initialize() {
@@ -45,15 +49,56 @@ class SceneManager {
     this.initialCameraPosition = this.camera.position.clone();
     this.initialCameraTarget = this.camera.target.clone();
 
+    // Initialize default pipeline
+    this.defaultPipeline = new BABYLON.DefaultRenderingPipeline(
+      "defaultPipeline",
+      true,
+      this.scene,
+      [this.camera]
+    );
+
+    // Configure image processing
+    this.defaultPipeline.imageProcessing.enabled = true;
+    this.defaultPipeline.imageProcessing.exposure = 1;
+    this.defaultPipeline.imageProcessing.contrast = 1;
+
+    // Configure bloom
+    this.defaultPipeline.bloomEnabled = true;
+    this.defaultPipeline.bloomThreshold = 0.8;
+    this.defaultPipeline.bloomWeight = 0.3;
+    this.defaultPipeline.bloomKernel = 64;
+    this.defaultPipeline.bloomScale = 0.5;
+
+    // Configure FXAA
+    this.defaultPipeline.fxaaEnabled = true;
+
+    // Configure sharpening
+    this.defaultPipeline.sharpenEnabled = true;
+    this.defaultPipeline.sharpen.edgeAmount = 0.3;
+    this.defaultPipeline.sharpen.colorAmount = 1;
+
+    // Configure grain
+    this.defaultPipeline.grainEnabled = false;
+    this.defaultPipeline.grain.intensity = 10;
+    this.defaultPipeline.grain.animated = true;
+
+    // Configure chromatic aberration
+    this.defaultPipeline.chromaticAberrationEnabled = false;
+    this.defaultPipeline.chromaticAberration.aberrationAmount = 30;
+    this.defaultPipeline.chromaticAberration.radialIntensity = 1;
+
     window.addEventListener('resize', () => {
       this.engine.resize();
     });
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
+    this.frameWidth = 1.6 * scale;
+    this.frameHeight = 1.0 * scale;
+    
     const planeMesh = BABYLON.MeshBuilder.CreatePlane("frame", { 
-      width: 1.6 * scale, 
-      height: 1 * scale, 
+      width: this.frameWidth, 
+      height: this.frameHeight, 
       sideOrientation: BABYLON.Mesh.DOUBLESIDE 
     }, this.scene);
     
@@ -68,7 +113,8 @@ class SceneManager {
     material.useAlphaFromDiffuseTexture = true;
 
     // Apply effects
-    material.alpha = effects.opacity || 1;
+    // Remove this line since we'll use updateMeshOpacity instead
+    // material.alpha = effects.opacity || 1;
     
     // Apply brightness and color mapping
     const brightness = effects.brightness;
@@ -100,7 +146,7 @@ class SceneManager {
         material.alphaMode = BABYLON.Constants.ALPHA_COMBINE;
     }
 
-    // Apply UV coordinates if provided, without flipping them vertically
+    // Apply UV coordinates if provided
     if (effects.uv) {
       planeMesh.setVerticesData(BABYLON.VertexBuffer.UVKind, effects.uv);
     }
@@ -166,6 +212,107 @@ class SceneManager {
   // Add a method to render a single frame
   renderFrame() {
     this.scene.render();
+  }
+
+  // Add new method to update post-processing settings
+  updatePostProcessing(settings) {
+    if (!this.defaultPipeline) return;
+
+    // Update image processing
+    if (settings.exposure !== undefined) {
+      this.defaultPipeline.imageProcessing.exposure = settings.exposure;
+    }
+    if (settings.contrast !== undefined) {
+      this.defaultPipeline.imageProcessing.contrast = settings.contrast;
+    }
+
+    // Update bloom
+    if (settings.bloomEnabled !== undefined) {
+      this.defaultPipeline.bloomEnabled = settings.bloomEnabled;
+    }
+    if (settings.bloomThreshold !== undefined) {
+      this.defaultPipeline.bloomThreshold = settings.bloomThreshold;
+    }
+    if (settings.bloomWeight !== undefined) {
+      this.defaultPipeline.bloomWeight = settings.bloomWeight;
+    }
+
+    // Update sharpening
+    if (settings.sharpenEnabled !== undefined) {
+      this.defaultPipeline.sharpenEnabled = settings.sharpenEnabled;
+    }
+    if (settings.sharpenAmount !== undefined) {
+      this.defaultPipeline.sharpen.edgeAmount = settings.sharpenAmount;
+    }
+
+    // Update grain
+    if (settings.grainEnabled !== undefined) {
+      this.defaultPipeline.grainEnabled = settings.grainEnabled;
+    }
+    if (settings.grainIntensity !== undefined) {
+      this.defaultPipeline.grain.intensity = settings.grainIntensity;
+    }
+
+    // Update chromatic aberration
+    if (settings.chromaticAberrationEnabled !== undefined) {
+      this.defaultPipeline.chromaticAberrationEnabled = settings.chromaticAberrationEnabled;
+    }
+    if (settings.chromaticAberrationAmount !== undefined) {
+      this.defaultPipeline.chromaticAberration.aberrationAmount = settings.chromaticAberrationAmount;
+    }
+  }
+
+  updateClipPlanes(bounds) {
+    if (!bounds) return;
+
+    const { top, bottom, left, right } = bounds;
+    const scaleX = this.frameWidth / 2;
+    const scaleY = this.frameHeight / 2;
+
+    // Create the clipping planes
+    this.scene.clipPlane = new BABYLON.Plane(1, 0, 0, -right * scaleX);    // Right plane
+    this.scene.clipPlane2 = new BABYLON.Plane(-1, 0, 0, left * scaleX);    // Left plane
+    this.scene.clipPlane3 = new BABYLON.Plane(0, 1, 0, -top * scaleY);     // Top plane
+    this.scene.clipPlane4 = new BABYLON.Plane(0, -1, 0, bottom * scaleY);  // Bottom plane
+
+    // Update all existing meshes with all clipping planes
+    this.frameMeshes.forEach(mesh => {
+      if (mesh.material) {
+        mesh.material.clipPlane = this.scene.clipPlane;
+        mesh.material.clipPlane2 = this.scene.clipPlane2;
+        mesh.material.clipPlane3 = this.scene.clipPlane3;
+        mesh.material.clipPlane4 = this.scene.clipPlane4;
+        mesh.material.forceClipPlane = true;
+        mesh.material.needDepthPrePass = true;
+        mesh.material.separateCullingPass = true;
+        mesh.material.markAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
+        mesh.material.markAsDirty(BABYLON.Material.AllDirtyFlag);
+      }
+    });
+
+    this.scene.markAllMaterialsAsDirty(BABYLON.Material.ClipPlaneDirtyFlag);
+    this.scene.markAllMaterialsAsDirty(BABYLON.Material.AllDirtyFlag);
+  }
+
+  updateMeshOpacity(opacity) {
+    this.frameMeshes.forEach(mesh => {
+      if (mesh.material) {
+        mesh.material.alpha = opacity;
+      }
+    });
+  }
+
+  updateMeshBrightness(brightness, colorMap) {
+    this.frameMeshes.forEach(mesh => {
+      if (mesh.material) {
+        if (colorMap) {
+          const colors = colorMap(brightness);
+          mesh.material.diffuseColor = new BABYLON.Color3(colors.r, colors.g, colors.b);
+        } else {
+          mesh.material.diffuseColor = new BABYLON.Color3(brightness, brightness, brightness);
+        }
+      }
+    });
   }
 }
 

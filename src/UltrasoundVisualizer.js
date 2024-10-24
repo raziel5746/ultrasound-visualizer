@@ -6,6 +6,8 @@ import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaList, FaCog
 import TextureAtlas from './utils/TextureAtlas';
 import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
+import SliceControl from './components/SliceControl';
+import { ControlGroup } from './components/ControlPanel';
 
 const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const canvasRef = useRef(null);
@@ -91,6 +93,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     if (canvasRef.current) {
       sceneManagerRef.current = new SceneManager(canvasRef.current);
       sceneManagerRef.current.initialize();
+      // Remove this line:
+      // sceneManagerRef.current.setupClippingPlane(); 
 
       const renderLoop = (time) => {
         if (time - lastRenderTime.current >= 1000 / targetFps) {
@@ -247,6 +251,23 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, [defaultValues]);
 
+  // Add a ref to store the current clipping bounds
+  const currentClipBounds = useRef({
+    top: 1,
+    bottom: -1,
+    left: -1,
+    right: 1
+  });
+
+  // Update the handleClipPlanesChange function to store the bounds
+  const handleClipPlanesChange = useCallback((bounds) => {
+    currentClipBounds.current = bounds;
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.updateClipPlanes(bounds);
+    }
+  }, []);
+
+  // Modify updateFrameStack to apply opacity after creating meshes
   const updateFrameStack = useCallback(() => {
     if (sceneManagerRef.current && textureAtlas) {
       sceneManagerRef.current.clearFrameMeshes();
@@ -269,39 +290,114 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         const position = new BABYLON.Vector3(0, 0, i * actualFrameDistance - offset);
         
         sceneManagerRef.current.createFrameMesh(textureAtlas.atlas, position, scale, {
-          opacity,
           brightness,
           blendMode,
           uv: textureAtlas.getFrameUV(frameIndex),
           colorMap: (value) => ColorMaps[colorMap].map(value, colorMapParams)
         });
       }
+
+      // Apply opacity after creating all meshes
+      sceneManagerRef.current.updateMeshOpacity(opacity);
+
+      // Reapply the current clipping planes
+      sceneManagerRef.current.updateClipPlanes(currentClipBounds.current);
     }
   }, [
-    textureAtlas, stackLength, framePercentage, opacity, brightness,
-    blendMode, isFrameOrderInverted, sliceRange, colorMap, colorMapParams
+    textureAtlas,
+    framePercentage,
+    stackLength,
+    sliceRange,
+    isFrameOrderInverted,
+    opacity,
+    brightness,
+    blendMode,
+    colorMap,
+    colorMapParams
   ]);
 
-  const throttledUpdateFrameStack = useMemo(() => {
-    let timeoutId = null;
+  // Add these refs near the top with other refs
+  const updateFrameStackScheduled = useRef(false);
+  const lastUpdateTime = useRef(0);
+  const pendingUpdate = useRef(null);
+
+  // Replace the throttledUpdateFrameStack with this new version
+  const throttledUpdateFrameStack = useCallback(() => {
+    if (!updateFrameStackScheduled.current) {
+      updateFrameStackScheduled.current = true;
+
+      const performUpdate = () => {
+        const now = performance.now();
+        const timeSinceLastUpdate = now - lastUpdateTime.current;
+
+        if (timeSinceLastUpdate >= 16) { // 60fps = ~16ms
+          updateFrameStack();
+          lastUpdateTime.current = now;
+          updateFrameStackScheduled.current = false;
+          pendingUpdate.current = null;
+        } else {
+          // Schedule next update
+          pendingUpdate.current = requestAnimationFrame(performUpdate);
+        }
+      };
+
+      pendingUpdate.current = requestAnimationFrame(performUpdate);
+    }
+  }, [updateFrameStack]);
+
+  // Add cleanup for the pending updates
+  useEffect(() => {
     return () => {
-      if (timeoutId === null) {
-        updateFrameStack();
-        timeoutId = setTimeout(() => {
-          timeoutId = null;
-        }, 100);
+      if (pendingUpdate.current) {
+        cancelAnimationFrame(pendingUpdate.current);
       }
     };
-  }, [updateFrameStack]);
+  }, []);
+
+  // Update handleImmediateUpdate
+  const handleImmediateUpdate = useCallback((setter, property) => {
+    return (value) => {
+      setter(value);
+      if (sceneManagerRef.current && textureAtlas) {
+        switch (property) {
+          case 'opacity':
+            sceneManagerRef.current.updateMeshOpacity(value);
+            break;
+          case 'brightness':
+            sceneManagerRef.current.updateMeshBrightness(
+              value,
+              (v) => ColorMaps[colorMap].map(v, colorMapParams)
+            );
+            break;
+          default:
+            // For other properties, use the full stack update
+            throttledUpdateFrameStack();
+        }
+      }
+    };
+  }, [textureAtlas, colorMap, colorMapParams, throttledUpdateFrameStack]);
+
+  // Replace the handleImmediatePostProcessingChange function
+  const handleImmediatePostProcessingChange = useCallback((key) => {
+    return (value) => {
+      // Update state
+      setPostProcessing(prev => ({
+        ...prev,
+        [key]: value
+      }));
+
+      // Update scene immediately without debounce
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.updatePostProcessing({
+          [key]: value
+        });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     throttledUpdateFrameStack();
   }, [opacity, brightness, throttledUpdateFrameStack]);
-
-  const handleImmediateUpdate = useCallback((setter) => (value) => {
-    setter(value);
-    throttledUpdateFrameStack();
-  }, [throttledUpdateFrameStack]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -390,6 +486,67 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     setShowPresets(false);
     throttledUpdateFrameStack();
   }, [brightness, opacity, blendMode, throttledUpdateFrameStack]);
+
+  // In UltrasoundVisualizer.js, add new state:
+  const [postProcessing, setPostProcessing] = useState({
+    exposure: 1,
+    contrast: 1,
+    bloomEnabled: true,
+    bloomThreshold: 0.8,
+    bloomWeight: 0.3,
+    sharpenEnabled: true,
+    sharpenAmount: 0.3,
+    grainEnabled: false,
+    grainIntensity: 10,
+    chromaticAberrationEnabled: false,
+    chromaticAberrationAmount: 30,
+  });
+
+  // Add this near the other useRef declarations
+  const postProcessingUpdateTimeout = useRef(null);
+
+  // Update the useEffect for post-processing
+  useEffect(() => {
+    // Only update on mount and when switching features on/off
+    if (sceneManagerRef.current) {
+      const relevantChanges = {
+        bloomEnabled: postProcessing.bloomEnabled,
+        sharpenEnabled: postProcessing.sharpenEnabled,
+        grainEnabled: postProcessing.grainEnabled,
+        chromaticAberrationEnabled: postProcessing.chromaticAberrationEnabled
+      };
+      sceneManagerRef.current.updatePostProcessing(relevantChanges);
+    }
+  }, [
+    postProcessing.bloomEnabled,
+    postProcessing.sharpenEnabled,
+    postProcessing.grainEnabled,
+    postProcessing.chromaticAberrationEnabled
+  ]);
+
+  // Add cleanup
+  useEffect(() => {
+    const currentTimeout = postProcessingUpdateTimeout.current;
+    return () => {
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+    };
+  }, []);
+
+  // Add this effect to initialize clip planes
+  useEffect(() => {
+    if (textureAtlas && sceneManagerRef.current) {
+      // Initialize with default clip planes (fully visible)
+      sceneManagerRef.current.updateClipPlanes({
+        top: 1,
+        bottom: -1,
+        left: -1,
+        right: 1
+      });
+      updateFrameStack();
+    }
+  }, [textureAtlas, updateFrameStack]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
@@ -620,7 +777,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: isControlPanelOpen ? '300px' : 0,
+            bottom: isControlPanelOpen ? '400px' : 0, // Match the control panel height
             left: 0,
             right: 0,
             backgroundColor: '#f0f0f0',
@@ -630,7 +787,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
             alignItems: 'center',
             cursor: 'pointer',
             boxShadow: '0 -2px 5px rgba(0,0,0,0.1)',
-            zIndex: 1001,
+            zIndex: 1001, // Higher than the control panel's z-index (1000)
+            transition: 'bottom 0.2s ease-in-out', // Smooth transition
           }}
           onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
         >
@@ -653,15 +811,39 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         setSliceRange={handleSliceRangeChange}
         isMobile={isMobile}
         isOpen={!isMobile || isControlPanelOpen}
-        onImmediateOpacityChange={handleImmediateUpdate(setOpacity)}
-        onImmediateBrightnessChange={handleImmediateUpdate(setBrightness)}
+        onImmediateOpacityChange={handleImmediateUpdate(setOpacity, 'opacity')}
+        onImmediateBrightnessChange={handleImmediateUpdate(setBrightness, 'brightness')}
         globalLightIntensity={globalLightIntensity}
         setGlobalLightIntensity={setGlobalLightIntensity}
         colorMap={colorMap}
         setColorMap={setColorMap}
         colorMapParams={colorMapParams}
         setColorMapParams={setColorMapParams}
-      />
+        postProcessing={postProcessing}
+        setPostProcessing={setPostProcessing}
+        onImmediateGlobalLightChange={handleImmediateUpdate(setGlobalLightIntensity)}
+        onImmediatePostProcessingChange={handleImmediatePostProcessingChange}
+        onClipPlanesChange={handleClipPlanesChange}
+        onImmediateStackLengthChange={handleImmediateUpdate(setStackLength)}
+        onImmediateFramePercentageChange={handleImmediateUpdate(setFramePercentage)}
+        onImmediateSlicePositionChange={(newPosition) => {
+          const rangeWidth = sliceRange[1] - sliceRange[0];
+          const newStart = Math.max(0, Math.min(newPosition, 100 - rangeWidth));
+          const newEnd = Math.min(100, newStart + rangeWidth);
+          handleSliceRangeChange([newStart, newEnd]);
+          updateFrameStack();
+        }}
+      >
+        <ControlGroup title="Slice Control">
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+            <SliceControl
+              width={200}
+              height={200}
+              onClipPlanesChange={handleClipPlanesChange}
+            />
+          </div>
+        </ControlGroup>
+      </ControlPanel>
     </div>
   );
 };
