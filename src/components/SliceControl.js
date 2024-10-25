@@ -165,11 +165,21 @@ const SliceControl = ({
 
         if (externalRectangle) {
           const handles = getHandles();
-          const handle = handles.find(h => 
+          
+          // First check center handle
+          const centerHandle = handles.find(h => h.type === 'center');
+          if (centerHandle && Math.sqrt(Math.pow(centerHandle.x - x, 2) + Math.pow(centerHandle.y - y, 2)) < 15) {
+            canvasRef.current.style.cursor = 'move';
+            return;
+          }
+
+          // Then check other handles
+          const otherHandle = handles.find(h => 
+            h.type !== 'center' && 
             Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
           );
           
-          if (handle) {
+          if (otherHandle) {
             const cursorType = {
               left: 'ew-resize',
               right: 'ew-resize',
@@ -178,9 +188,8 @@ const SliceControl = ({
               topleft: 'nwse-resize',
               bottomright: 'nwse-resize',
               topright: 'nesw-resize',
-              bottomleft: 'nesw-resize',
-              center: 'move'  // Add cursor type for center handle
-            }[handle.type] || 'grab';
+              bottomleft: 'nesw-resize'
+            }[otherHandle.type] || 'grab';
             
             canvasRef.current.style.cursor = cursorType;
           } else {
@@ -295,13 +304,30 @@ const SliceControl = ({
 
     if (externalRectangle) {
       const handles = getHandles();
-      const handle = handles.find(h => 
+      
+      // First check for center handle
+      const centerHandle = handles.find(h => h.type === 'center');
+      if (centerHandle && Math.sqrt(Math.pow(centerHandle.x - x, 2) + Math.pow(centerHandle.y - y, 2)) < 15) {
+        setIsDragging(true);
+        initialHandleType.current = 'center';
+        setDragStart({
+          x,
+          y,
+          originalRect: { ...externalRectangle }
+        });
+        canvasRef.current.style.cursor = 'grabbing';
+        return;
+      }
+
+      // Then check other handles
+      const otherHandle = handles.find(h => 
+        h.type !== 'center' && 
         Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
       );
 
-      if (handle) {
+      if (otherHandle) {
         setIsDragging(true);
-        initialHandleType.current = handle.type;
+        initialHandleType.current = otherHandle.type;
         setDragStart({
           x,
           y,
@@ -389,13 +415,31 @@ const SliceControl = ({
 
         // Draw handles
         ctx.fillStyle = '#3498db';
+        // Draw all handles except center
         rectangleState.handles.forEach(handle => {
-          ctx.beginPath();
-          // Make center handle slightly larger
-          const radius = handle.type === 'center' ? 6 : 5;
-          ctx.arc(handle.x, handle.y, radius, 0, Math.PI * 2);
-          ctx.fill();
+          if (handle.type !== 'center') {  // Skip center handle in the loop
+            ctx.beginPath();
+            ctx.arc(handle.x, handle.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
         });
+
+        // Draw center handle last with outline
+        const centerHandle = rectangleState.handles.find(handle => handle.type === 'center');
+        if (centerHandle) {
+          // Draw white outline
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(centerHandle.x, centerHandle.y, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Fill center
+          ctx.fillStyle = '#3498db';
+          ctx.beginPath();
+          ctx.arc(centerHandle.x, centerHandle.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       isDrawing = false;
@@ -553,19 +597,35 @@ const SliceControl = ({
 
   // Add touch event handlers and modify existing mouse handlers
   const handleTouchStart = (e) => {
-    e.preventDefault(); // Prevent scrolling while dragging
+    e.preventDefault();
     const touch = e.touches[0];
     const { x, y } = getCanvasCoordinates(touch.clientX, touch.clientY);
 
     if (externalRectangle) {
       const handles = getHandles();
-      const handle = handles.find(h => 
+      
+      // First check for center handle
+      const centerHandle = handles.find(h => h.type === 'center');
+      if (centerHandle && Math.sqrt(Math.pow(centerHandle.x - x, 2) + Math.pow(centerHandle.y - y, 2)) < 15) {
+        setIsDragging(true);
+        initialHandleType.current = 'center';
+        setDragStart({
+          x,
+          y,
+          originalRect: { ...externalRectangle }
+        });
+        return;
+      }
+
+      // Then check other handles
+      const otherHandle = handles.find(h => 
+        h.type !== 'center' && 
         Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
       );
 
-      if (handle) {
+      if (otherHandle) {
         setIsDragging(true);
-        initialHandleType.current = handle.type;
+        initialHandleType.current = otherHandle.type;
         setDragStart({
           x,
           y,
@@ -658,23 +718,6 @@ const SliceControl = ({
             boxSizing: 'border-box'
           }}
         />
-        {/* Add aspect ratio overlay */}
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: '#fff',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          fontSize: isMobile ? '12px' : '14px',
-          fontFamily: 'monospace',
-          pointerEvents: 'none', // Prevent interference with canvas interaction
-          zIndex: 2
-        }}>
-          {frameAspectRatio.toFixed(2)}:1
-        </div>
       </div>
       {showSliders && renderSliders()}
     </div>
