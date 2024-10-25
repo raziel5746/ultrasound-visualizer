@@ -192,8 +192,42 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, [globalLightIntensity]);
 
+  // Add frameAspectRatio state near other state declarations
+  const [frameAspectRatio, setFrameAspectRatio] = useState(1.6); // Default to 1.6
+
+  // Update the extractFrames function to set initial rectangle with aspect ratio
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
+      const aspectRatio = video.videoWidth / video.videoHeight;
+      setFrameAspectRatio(aspectRatio);
+
+      // Set initial rectangle with correct aspect ratio
+      const margin = 0.1;
+      const canvasWidth = 200; // Default canvas width from SliceControl
+      const canvasHeight = 200; // Default canvas height from SliceControl
+      const availableWidth = canvasWidth * (1 - 2 * margin);
+      const availableHeight = canvasHeight * (1 - 2 * margin);
+
+      let rectWidth, rectHeight;
+      if (availableWidth / availableHeight > aspectRatio) {
+        rectHeight = availableHeight;
+        rectWidth = rectHeight * aspectRatio;
+      } else {
+        rectWidth = availableWidth;
+        rectHeight = rectWidth / aspectRatio;
+      }
+
+      const rectX = (canvasWidth - rectWidth) / 2;
+      const rectY = (canvasHeight - rectHeight) / 2;
+
+      // Set the initial rectangle
+      setSliceRectangle({
+        x: rectX,
+        y: rectY,
+        width: rectWidth,
+        height: rectHeight
+      });
+
       const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
       const maxFrames = 500;
       const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
@@ -846,6 +880,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         style={{
           height: isMobile ? (isControlPanelOpen ? '340px' : '0') : '100%',
         }}
+        frameAspectRatio={frameAspectRatio}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

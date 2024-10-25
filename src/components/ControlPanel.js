@@ -235,6 +235,7 @@ const ControlPanel = ({
   rectangle, // Add this
   onRectangleChange, // Add this
   style, // Add this prop
+  frameAspectRatio,
   children
 }) => {
   const convertNonLinear = (value, maxOutput) => {
@@ -321,6 +322,7 @@ const ControlPanel = ({
                     rectangle={rectangle}
                     onRectangleChange={onRectangleChange}
                     isMobile={isMobile}
+                    frameAspectRatio={frameAspectRatio}
                   />
                 </div>
               </ControlGroup>
@@ -514,6 +516,7 @@ const ControlPanel = ({
                       rectangle={rectangle}
                       onRectangleChange={onRectangleChange}
                       isMobile={isMobile}
+                      frameAspectRatio={frameAspectRatio}
                     />
                   </div>
                 </ControlGroup>

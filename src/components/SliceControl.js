@@ -8,7 +8,8 @@ const SliceControl = ({
   onClipPlanesChange,
   rectangle: externalRectangle,
   onRectangleChange,
-  isMobile // Add this prop
+  isMobile,
+  frameAspectRatio = 1.6 // Default value
 }) => {
   const canvasRef = useRef(null);
   const throttledFunctionRef = useRef(null);  // Renamed to avoid conflict
@@ -23,9 +24,6 @@ const SliceControl = ({
     top: 1,
     bottom: -1
   });
-
-  // Add frame aspect ratio constant
-  const FRAME_ASPECT_RATIO = 1.6;
 
   // Add function to get canvas coordinates
   const getCanvasCoordinates = useCallback((clientX, clientY) => {
@@ -44,12 +42,13 @@ const SliceControl = ({
 
     let guideWidth, guideHeight;
     
-    if (availableWidth / availableHeight > FRAME_ASPECT_RATIO) {
+    // Use the actual frame aspect ratio instead of hardcoded FRAME_ASPECT_RATIO
+    if (availableWidth / availableHeight > frameAspectRatio) {
       guideHeight = availableHeight;
-      guideWidth = guideHeight * FRAME_ASPECT_RATIO;
+      guideWidth = guideHeight * frameAspectRatio;
     } else {
       guideWidth = availableWidth;
-      guideHeight = guideWidth / FRAME_ASPECT_RATIO;
+      guideHeight = guideWidth / frameAspectRatio;
     }
 
     const x = (width - guideWidth) / 2;
@@ -61,7 +60,7 @@ const SliceControl = ({
       width: guideWidth,
       height: guideHeight
     };
-  }, [width, height]);
+  }, [width, height, frameAspectRatio]); // Add frameAspectRatio to dependencies
 
   // Second, define normalizeCoords
   const normalizeCoords = useCallback((x, y) => {
@@ -197,6 +196,7 @@ const SliceControl = ({
 
     requestAnimationFrame(() => {
       if (isDrawing) {
+        // Allow free-form drawing without aspect ratio constraint
         onRectangleChange(prev => {
           const newRect = {
             ...prev,
@@ -633,7 +633,8 @@ const SliceControl = ({
         width: '100%', 
         display: 'flex', 
         justifyContent: 'center',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        position: 'relative' // Add position relative
       }}>
         <canvas
           ref={canvasRef}
@@ -657,6 +658,23 @@ const SliceControl = ({
             boxSizing: 'border-box'
           }}
         />
+        {/* Add aspect ratio overlay */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: '#fff',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: isMobile ? '12px' : '14px',
+          fontFamily: 'monospace',
+          pointerEvents: 'none', // Prevent interference with canvas interaction
+          zIndex: 2
+        }}>
+          {frameAspectRatio.toFixed(2)}:1
+        </div>
       </div>
       {showSliders && renderSliders()}
     </div>
