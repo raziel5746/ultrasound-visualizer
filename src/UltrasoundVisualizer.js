@@ -18,7 +18,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const [totalFrames, setTotalFrames] = useState(0);
   const [renderedFrames, setRenderedFrames] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
-  const [isControlPanelOpen, setIsControlPanelOpen] = useState(true);
+  const [isControlPanelOpen, setIsControlPanelOpen] = useState(false);
   const [sliceRange, setSliceRange] = useState([0, 100]);
   const [textureAtlas, setTextureAtlas] = useState(null);
   const [globalLightIntensity, setGlobalLightIntensity] = useState(1);
@@ -780,7 +780,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: isControlPanelOpen ? '340px' : 0, // Changed from 400px to 340px
+            bottom: isControlPanelOpen ? '340px' : 0,
             left: 0,
             right: 0,
             backgroundColor: '#282c34',
