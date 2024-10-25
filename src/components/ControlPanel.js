@@ -197,7 +197,7 @@ const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
 // Update the ControlGroup component to accept isMobile prop
 export const ControlGroup = ({ children, isMobile }) => (
   <div style={{ 
-    marginBottom: isMobile ? '15px' : '20px',
+    marginBottom: isMobile ? '16px' : '0px', // Reduced from 20px to 15px for desktop
     padding: isMobile ? '12px' : '15px',
     backgroundColor: '#282c34',
     borderRadius: '8px',
@@ -305,18 +305,34 @@ const ControlPanel = ({
           <div style={{ 
             display: 'flex', 
             flexDirection: isMobile ? 'row' : 'column', 
-            gap: isMobile ? '10px' : '25px', // Increased gap on desktop
+            gap: isMobile ? '8px' : '24px', // Reduced from 25px to 20px for desktop
             height: isMobile ? '100%' : 'auto',
             maxWidth: '100%',
             margin: '0 auto',
           }}>
+            {!isMobile && (
+              // Slice Control section for desktop view
+              <ControlGroup isMobile={isMobile}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+                  <SliceControl
+                    width={200}
+                    height={200}
+                    onClipPlanesChange={onClipPlanesChange}
+                    rectangle={rectangle}
+                    onRectangleChange={onRectangleChange}
+                    isMobile={isMobile}
+                  />
+                </div>
+              </ControlGroup>
+            )}
+
             {/* Left column - Appearance */}
             <div style={{ 
-              flex: isMobile ? '0 0 calc(50% - 5px)' : 'auto', // Account for gap
-              minWidth: 0, // Allow shrinking
+              flex: isMobile ? '0 0 calc(50% - 5px)' : 'auto',
+              minWidth: 0,
               overflowY: 'auto',
               overflowX: 'hidden',
-              paddingRight: isMobile ? '5px' : 0, // Reduced padding
+              paddingRight: isMobile ? '5px' : 0,
               height: isMobile ? '100%' : 'auto',
               boxSizing: 'border-box',
             }}>
@@ -477,28 +493,31 @@ const ControlPanel = ({
 
             {/* Right column */}
             <div style={{ 
-              flex: isMobile ? '0 0 calc(50% - 5px)' : 'auto', // Account for gap
-              minWidth: 0, // Allow shrinking
+              flex: isMobile ? '0 0 calc(50% - 5px)' : 'auto',
+              minWidth: 0,
               overflowY: 'auto',
               overflowX: 'hidden',
-              paddingLeft: isMobile ? '5px' : 0, // Reduced padding
+              paddingLeft: isMobile ? '5px' : 0,
               height: isMobile ? '100%' : 'auto',
               boxSizing: 'border-box',
               display: 'flex',
               flexDirection: 'column',
             }}>
-              <ControlGroup isMobile={isMobile}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
-                  <SliceControl
-                    width={200}
-                    height={200}
-                    onClipPlanesChange={onClipPlanesChange}
-                    rectangle={rectangle}
-                    onRectangleChange={onRectangleChange}
-                    isMobile={isMobile} // Make sure this line is present
-                  />
-                </div>
-              </ControlGroup>
+              {isMobile && (
+                // Slice Control section for mobile view
+                <ControlGroup isMobile={isMobile}>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+                    <SliceControl
+                      width={200}
+                      height={200}
+                      onClipPlanesChange={onClipPlanesChange}
+                      rectangle={rectangle}
+                      onRectangleChange={onRectangleChange}
+                      isMobile={isMobile}
+                    />
+                  </div>
+                </ControlGroup>
+              )}
 
               <ControlGroup isMobile={isMobile}>
                 <ControlItem
