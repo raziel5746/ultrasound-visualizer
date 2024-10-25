@@ -10,7 +10,26 @@ import SliceControl from './components/SliceControl';
 import { ControlGroup } from './components/ControlPanel';
 import debounce from 'lodash/debounce';
 
+// Add these new constants for HD resolution
+const SD_DIMENSIONS = {
+  mobile: { width: 640, height: 480 },
+  desktop: { width: 1280, height: 720 }
+};
+
+const HD_DIMENSIONS = {
+  mobile: { width: 1280, height: 720 },
+  desktop: { width: 1920, height: 1080 }
+};
+
 const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
+  // Move maxDimensions declaration to the top
+  const [isHDMode, setIsHDMode] = useState(false);
+  const maxDimensions = useMemo(() => {
+    const isMobileDevice = window.innerWidth <= 768;
+    const dimensions = isHDMode ? HD_DIMENSIONS : SD_DIMENSIONS;
+    return dimensions[isMobileDevice ? 'mobile' : 'desktop'];
+  }, [isHDMode]);
+
   const canvasRef = useRef(null);
   const sceneManagerRef = useRef(null);
   const [isLocalLoading, setIsLocalLoading] = useState(true);
@@ -195,11 +214,38 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   // Add frameAspectRatio state near other state declarations
   const [frameAspectRatio, setFrameAspectRatio] = useState(1.6); // Default to 1.6
 
-  // Update the extractFrames function to set initial rectangle with aspect ratio
+  // Add these new states near other state declarations
+  const [videoInfo, setVideoInfo] = useState({
+    originalWidth: 0,
+    originalHeight: 0,
+    scaledWidth: 0,
+    scaledHeight: 0,
+    scaleFactor: 0
+  });
+
+  // Add this ref to keep track of the current extraction process
+  const currentExtractionRef = useRef(null);
+
+  // Modify the extractFrames function
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
+      // Cancel any ongoing extraction process
+      if (currentExtractionRef.current) {
+        currentExtractionRef.current.cancel();
+      }
+
+      let isCancelled = false;
+      currentExtractionRef.current = { cancel: () => { isCancelled = true; } };
+
       const aspectRatio = video.videoWidth / video.videoHeight;
       setFrameAspectRatio(aspectRatio);
+
+      // Store original dimensions
+      setVideoInfo(prev => ({
+        ...prev,
+        originalWidth: video.videoWidth,
+        originalHeight: video.videoHeight
+      }));
 
       // Set initial rectangle with correct aspect ratio
       const margin = 0.1;
@@ -240,10 +286,55 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
           video.currentTime = (currentFrame * frameStep) / 30;
           video.onseeked = () => {
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            
+            // Determine the larger and smaller dimensions of the video
+            const largerDimension = Math.max(video.videoWidth, video.videoHeight);
+            const smallerDimension = Math.min(video.videoWidth, video.videoHeight);
+            
+            // Determine the larger and smaller dimensions of the max allowed size
+            const maxLargerDimension = Math.max(maxDimensions.width, maxDimensions.height);
+            const maxSmallerDimension = Math.min(maxDimensions.width, maxDimensions.height);
+            
+            // Calculate scaled dimensions while maintaining aspect ratio
+            let scaledWidth = video.videoWidth;
+            let scaledHeight = video.videoHeight;
+            
+            if (largerDimension > maxLargerDimension || smallerDimension > maxSmallerDimension) {
+              if (largerDimension / maxLargerDimension > smallerDimension / maxSmallerDimension) {
+                // Larger dimension is the limiting factor
+                const scaleFactor = maxLargerDimension / largerDimension;
+                scaledWidth = Math.round(video.videoWidth * scaleFactor);
+                scaledHeight = Math.round(video.videoHeight * scaleFactor);
+              } else {
+                // Smaller dimension is the limiting factor
+                const scaleFactor = maxSmallerDimension / smallerDimension;
+                scaledWidth = Math.round(video.videoWidth * scaleFactor);
+                scaledHeight = Math.round(video.videoHeight * scaleFactor);
+              }
+            }
+
+            // Update video info with scaled dimensions and scale factor
+            if (currentFrame === 0) { // Only update on first frame
+              const scaleFactor = (scaledWidth / video.videoWidth).toFixed(2);
+              setVideoInfo(prev => ({
+                ...prev,
+                scaledWidth,
+                scaledHeight,
+                scaleFactor
+              }));
+            }
+            
+            // Set canvas dimensions to the scaled size
+            canvas.width = scaledWidth;
+            canvas.height = scaledHeight;
+            
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Enable image smoothing for better quality when scaling down
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            // Draw the video frame with scaling
+            ctx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
             resolveFrame(canvas);
           };
         });
@@ -252,9 +343,18 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
       const extractAllFrames = async () => {
         const frameCanvases = [];
         for (let i = 0; i < frameCount; i++) {
+          if (isCancelled) {
+            reject(new Error('Frame extraction cancelled'));
+            return;
+          }
           const frameCanvas = await extractFrame(i);
           frameCanvases.push(frameCanvas);
           setExtractionProgress((i + 1) / frameCount);
+        }
+
+        if (isCancelled) {
+          reject(new Error('Frame extraction cancelled'));
+          return;
         }
 
         try {
@@ -267,9 +367,11 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         }
       };
 
-      extractAllFrames().catch(reject);
+      extractAllFrames().catch(reject).finally(() => {
+        currentExtractionRef.current = null;
+      });
     });
-  }, []);
+  }, [maxDimensions]);
 
   useEffect(() => {
     if (!videoUrl) {
@@ -304,8 +406,10 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         setTotalFrames(frameCount);
         setIsLocalLoading(false);
       } catch (error) {
-        setError(`Error extracting frames: ${error.message}`);
-        setIsLocalLoading(false);
+        if (error.message !== 'Frame extraction cancelled') {
+          setError(`Error extracting frames: ${error.message}`);
+          setIsLocalLoading(false);
+        }
       }
     };
 
@@ -585,6 +689,97 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     setSliceRectangle(newRectangle);
   }, []);
 
+  // Add these new states
+  const [storedVideoFile, setStoredVideoFile] = useState(null);
+  
+  // Update the handleResolutionToggle useCallback
+  const handleResolutionToggle = useCallback(async () => {
+    if (!storedVideoFile) return;
+    
+    setIsHDMode(prev => !prev);
+    setTextureAtlas(null);
+    setIsLocalLoading(true);
+    setError(null);
+    setExtractionProgress(0);
+    setTotalFrames(0);
+    setRenderedFrames(0);
+
+    // Cancel any ongoing extraction process
+    if (currentExtractionRef.current) {
+      currentExtractionRef.current.cancel();
+    }
+
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.src = URL.createObjectURL(storedVideoFile);
+
+    try {
+      await video.play();
+      video.pause();
+      const frameCount = await extractFrames(video);
+      setTotalFrames(frameCount);
+      setIsLocalLoading(false);
+    } catch (error) {
+      if (error.message !== 'Frame extraction cancelled') {
+        setError(`Error extracting frames: ${error.message}`);
+        setIsLocalLoading(false);
+      }
+    } finally {
+      URL.revokeObjectURL(video.src);
+    }
+  }, [storedVideoFile, extractFrames, setError]);
+
+  // Update the video loading effect
+  useEffect(() => {
+    if (!videoUrl) {
+      setError('No video URL provided');
+      setIsLocalLoading(false);
+      return;
+    }
+
+    // Clean up previous stored video if exists
+    if (storedVideoFile) {
+      URL.revokeObjectURL(URL.createObjectURL(storedVideoFile));
+    }
+
+    // Store the new video file
+    if (videoUrl instanceof Blob) {
+      setStoredVideoFile(videoUrl);
+    } else {
+      // If it's a URL, fetch the file first
+      fetch(videoUrl)
+        .then(response => response.blob())
+        .then(blob => setStoredVideoFile(blob))
+        .catch(error => setError(`Error storing video file: ${error.message}`));
+    }
+
+    // Rest of the existing video loading code...
+  }, [videoUrl, setError, extractFrames, storedVideoFile]); // Add storedVideoFile to the dependency array
+
+  // Add cleanup for stored video on unmount
+  useEffect(() => {
+    return () => {
+      if (storedVideoFile) {
+        URL.revokeObjectURL(URL.createObjectURL(storedVideoFile));
+      }
+    };
+  }, [storedVideoFile]);
+
+  // Add this function near the top of the component to determine if HD is available
+  const isHDAvailable = useMemo(() => {
+    const { originalWidth, originalHeight } = videoInfo;
+    if (!originalWidth || !originalHeight) return false;
+    
+    const largerDimension = Math.max(originalWidth, originalHeight);
+    
+    // Check if the original resolution is higher than SD resolution
+    const sdDimensions = window.innerWidth <= 768 ? SD_DIMENSIONS.mobile : SD_DIMENSIONS.desktop;
+    const maxSdDimension = Math.max(sdDimensions.width, sdDimensions.height);
+    
+    return largerDimension > maxSdDimension;
+  }, [videoInfo]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -696,6 +891,27 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
                 <span>Frames: {renderedFrames}</span>
               </div>
 
+              {/* Add resolution info */}
+              {videoInfo.originalWidth > 0 && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: '15px',
+                  fontSize: '14px',
+                  color: '#a0aec0'
+                }}>
+                  <div title="Original Resolution">
+                    {videoInfo.originalWidth}×{videoInfo.originalHeight}
+                  </div>
+                  <div style={{ color: '#3498db' }} title="Scaling Factor">
+                    →{videoInfo.scaleFactor}×
+                  </div>
+                  <div title="Scaled Resolution">
+                    {videoInfo.scaledWidth}×{videoInfo.scaledHeight}
+                  </div>
+                </div>
+              )}
+
               {/* FPS Badge */}
               <div style={{
                 backgroundColor: '#3498db',
@@ -712,6 +928,66 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
               }}>
                 {targetFps} FPS
               </div>
+
+              {/* HD/SD Toggle Button */}
+              {isHDAvailable && (
+                <div 
+                  style={{ 
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    position: 'relative',
+                    cursor: isLocalLoading ? 'default' : 'pointer',
+                    marginLeft: '10px',
+                    userSelect: 'none',
+                  }} 
+                  onClick={isLocalLoading ? undefined : handleResolutionToggle}
+                  title={isLocalLoading ? 'Processing...' : `Switch to ${isHDMode ? 'SD' : 'HD'} mode`}
+                >
+                  {/* Background circle */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    border: `2px solid ${isHDMode ? '#ffffff' : 'rgba(255, 255, 255, 0.5)'}`,
+                    backgroundColor: isHDMode ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                  }} />
+
+                  {/* Progress circle */}
+                  {isLocalLoading && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      border: '2px solid #3498db',
+                      clipPath: `polygon(50% 50%, -50% -50%, ${Math.cos(extractionProgress * Math.PI * 2 - Math.PI/2) * 100 + 50}% ${Math.sin(extractionProgress * Math.PI * 2 - Math.PI/2) * 100 + 50}%)`,
+                      transform: 'rotate(-90deg)',
+                      transition: 'clip-path 0.1s ease',
+                    }} />
+                  )}
+
+                  {/* HD text */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    color: isHDMode ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    opacity: isLocalLoading ? 0.5 : 1,
+                    transition: 'opacity 0.3s ease',
+                  }}>
+                    HD
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Right section */}
@@ -805,6 +1081,25 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
             <div style={{ marginTop: '10px' }}>
               {Math.round(extractionProgress * 100)}% ({Math.round(extractionProgress * totalFrames)} / {totalFrames} frames)
             </div>
+            
+            {/* Add resolution info */}
+            {videoInfo.originalWidth > 0 && (
+              <div style={{
+                marginTop: '20px',
+                fontSize: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                padding: '15px',
+                borderRadius: '10px',
+                gap: '5px'
+              }}>
+                <div>Original: {videoInfo.originalWidth}×{videoInfo.originalHeight}</div>
+                <div>Scaled: {videoInfo.scaledWidth}×{videoInfo.scaledHeight}</div>
+                <div>Scale factor: {videoInfo.scaleFactor}x</div>
+              </div>
+            )}
           </div>
         )}
       </div>

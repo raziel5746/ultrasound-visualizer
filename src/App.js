@@ -49,6 +49,7 @@ function App() {
               videoUrl={videoUrl}
               setError={setError}
               onFileSelect={handleChooseFile}
+              setVideoUrl={setVideoUrl}
             />
           </>
         )}
