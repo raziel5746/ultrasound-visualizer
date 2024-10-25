@@ -2,11 +2,17 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { FaUndo, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import { throttle } from 'lodash';
 
-const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
+const SliceControl = ({ 
+  width = 200, 
+  height = 200, 
+  onClipPlanesChange,
+  rectangle: externalRectangle,
+  onRectangleChange,
+  isMobile // Add this prop
+}) => {
   const canvasRef = useRef(null);
   const throttledFunctionRef = useRef(null);  // Renamed to avoid conflict
   const [isDrawing, setIsDrawing] = useState(false);
-  const [rectangle, setRectangle] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [showSliders, setShowSliders] = useState(false);
@@ -92,12 +98,12 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
   // Fourth, define getHandles
   const getHandles = useCallback(() => {
-    if (!rectangle) return [];
+    if (!externalRectangle) return [];
 
-    const x1 = rectangle.x;
-    const x2 = rectangle.x + rectangle.width;
-    const y1 = rectangle.y;
-    const y2 = rectangle.y + rectangle.height;
+    const x1 = externalRectangle.x;
+    const x2 = externalRectangle.x + externalRectangle.width;
+    const y1 = externalRectangle.y;
+    const y2 = externalRectangle.y + externalRectangle.height;
 
     const left = Math.min(x1, x2);
     const right = Math.max(x1, x2);
@@ -115,7 +121,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
       { x: left, y: (top + bottom) / 2, type: 'left' },
       { x: (left + right) / 2, y: (top + bottom) / 2, type: 'center' }  // Add center handle
     ];
-  }, [rectangle]);
+  }, [externalRectangle]);
 
   // Replace the throttledClipPlanesUpdate definition with this version
   const throttledClipPlanesUpdate = useCallback((rect) => {
@@ -158,7 +164,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
       requestAnimationFrame(() => {
         const { x, y } = getCanvasCoordinates(e.clientX, e.clientY);
 
-        if (rectangle) {
+        if (externalRectangle) {
           const handles = getHandles();
           const handle = handles.find(h => 
             Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
@@ -191,7 +197,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
     requestAnimationFrame(() => {
       if (isDrawing) {
-        setRectangle(prev => {
+        onRectangleChange(prev => {
           const newRect = {
             ...prev,
             width: coords.x - prev.x,
@@ -204,7 +210,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         const dx = coords.x - dragStart.x;
         const dy = coords.y - dragStart.y;
 
-        setRectangle(prev => {
+        onRectangleChange(prev => {
           const newRect = { ...prev };
           const handleType = initialHandleType.current || '';
           const originalRect = dragStart.originalRect;
@@ -282,12 +288,12 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         });
       }
     });
-  }, [isDrawing, isDragging, dragStart, getCanvasCoordinates, throttledClipPlanesUpdate, rectangle, getHandles]);
+  }, [isDrawing, isDragging, dragStart, getCanvasCoordinates, throttledClipPlanesUpdate, externalRectangle, getHandles, onRectangleChange]);
 
   const handleMouseDown = (e) => {
     const { x, y } = getCanvasCoordinates(e.clientX, e.clientY);
 
-    if (rectangle) {
+    if (externalRectangle) {
       const handles = getHandles();
       const handle = handles.find(h => 
         Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
@@ -299,7 +305,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         setDragStart({
           x,
           y,
-          originalRect: { ...rectangle }  // Store the initial rectangle state
+          originalRect: { ...externalRectangle }
         });
         canvasRef.current.style.cursor = 'grabbing';
         return;
@@ -307,7 +313,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     }
 
     setIsDrawing(true);
-    setRectangle({
+    onRectangleChange({
       x,
       y,
       width: 0,
@@ -325,10 +331,10 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
   // Add useMemo for rectangle calculations
   const rectangleState = useMemo(() => ({
-    rectangle,
+    rectangle: externalRectangle,
     handles: getHandles(),
     guideRect: getFrameGuideRect()
-  }), [rectangle, getHandles, getFrameGuideRect]);
+  }), [externalRectangle, getHandles, getFrameGuideRect]);
 
   // Modify the draw effect to use memoized values
   useEffect(() => {
@@ -408,27 +414,27 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
   // Add reset function
   const handleReset = useCallback(() => {
     const guideRect = getFrameGuideRect();
-    setRectangle(guideRect);
+    onRectangleChange(guideRect);
     throttledClipPlanesUpdate(guideRect);
-  }, [getFrameGuideRect, throttledClipPlanesUpdate]);
+  }, [getFrameGuideRect, throttledClipPlanesUpdate, onRectangleChange]);
 
   // Add a flag to track slider updates
   const isSliderUpdating = useRef(false);
 
   // Modify the effect that updates clip planes
   useEffect(() => {
-    if (rectangle && !isDrawing && !isDragging && !isSliderUpdating.current) {
-      updateClipPlanes(rectangle);
+    if (externalRectangle && !isDrawing && !isDragging && !isSliderUpdating.current) {
+      updateClipPlanes(externalRectangle);
     }
-  }, [rectangle, isDrawing, isDragging, updateClipPlanes]);
+  }, [externalRectangle, isDrawing, isDragging, updateClipPlanes]);
 
   const handleSliderChange = (updateFn) => {
     isSliderUpdating.current = true;
     updateFn();
     requestAnimationFrame(() => {
       isSliderUpdating.current = false;
-      if (rectangle) {
-        throttledClipPlanesUpdate(rectangle);
+      if (externalRectangle) {
+        throttledClipPlanesUpdate(externalRectangle);
       }
     });
   };
@@ -447,11 +453,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           type="range"
           min={0}
           max={width}
-          value={rectangle?.x || 0}
+          value={externalRectangle?.x || 0}
           onChange={(e) => {
             const newX = parseFloat(e.target.value);
             handleSliderChange(() => {
-              setRectangle(prev => ({
+              onRectangleChange(prev => ({
                 ...prev,
                 width: (prev.x + prev.width) - newX,
                 x: newX
@@ -467,11 +473,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           type="range"
           min={0}
           max={width}
-          value={(rectangle?.x || 0) + (rectangle?.width || 0)}
+          value={(externalRectangle?.x || 0) + (externalRectangle?.width || 0)}
           onChange={(e) => {
             const newRight = parseFloat(e.target.value);
             handleSliderChange(() => {
-              setRectangle(prev => ({
+              onRectangleChange(prev => ({
                 ...prev,
                 width: newRight - prev.x
               }));
@@ -486,11 +492,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           type="range"
           min={0}
           max={height}
-          value={rectangle?.y || 0}
+          value={externalRectangle?.y || 0}
           onChange={(e) => {
             const newY = parseFloat(e.target.value);
             handleSliderChange(() => {
-              setRectangle(prev => ({
+              onRectangleChange(prev => ({
                 ...prev,
                 height: (prev.y + prev.height) - newY,
                 y: newY
@@ -506,11 +512,11 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           type="range"
           min={0}
           max={height}
-          value={(rectangle?.y || 0) + (rectangle?.height || 0)}
+          value={(externalRectangle?.y || 0) + (externalRectangle?.height || 0)}
           onChange={(e) => {
             const newBottom = parseFloat(e.target.value);
             handleSliderChange(() => {
-              setRectangle(prev => ({
+              onRectangleChange(prev => ({
                 ...prev,
                 height: newBottom - prev.y
               }));
@@ -531,13 +537,19 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     };
   }, []);
 
-  // Add this effect near the other useEffect declarations
+  // Add a ref to track first mount
+  const isFirstMount = useRef(true);
+
+  // Update the initialization effect
   useEffect(() => {
-    // Initialize rectangle with frame bounds on mount
-    const guideRect = getFrameGuideRect();
-    setRectangle(guideRect);
-    updateClipPlanes(guideRect);
-  }, [getFrameGuideRect, updateClipPlanes]); // Only run on mount and if frame guide rect changes
+    // Only initialize if there's no rectangle and it's the first mount
+    if (isFirstMount.current && !externalRectangle) {
+      const guideRect = getFrameGuideRect();
+      onRectangleChange(guideRect);
+      updateClipPlanes(guideRect);
+      isFirstMount.current = false;
+    }
+  }, [getFrameGuideRect, updateClipPlanes, onRectangleChange, externalRectangle]);
 
   // Add touch event handlers and modify existing mouse handlers
   const handleTouchStart = (e) => {
@@ -545,7 +557,7 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
     const touch = e.touches[0];
     const { x, y } = getCanvasCoordinates(touch.clientX, touch.clientY);
 
-    if (rectangle) {
+    if (externalRectangle) {
       const handles = getHandles();
       const handle = handles.find(h => 
         Math.sqrt(Math.pow(h.x - x, 2) + Math.pow(h.y - y, 2)) < 15
@@ -557,14 +569,14 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
         setDragStart({
           x,
           y,
-          originalRect: { ...rectangle }
+          originalRect: { ...externalRectangle }
         });
         return;
       }
     }
 
     setIsDrawing(true);
-    setRectangle({
+    onRectangleChange({
       x,
       y,
       width: 0,
@@ -589,18 +601,22 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
   // Update the canvas element to include touch events
   return (
-    <div>
+    <div style={{ width: '100%', boxSizing: 'border-box' }}> {/* Added width and boxSizing */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        marginBottom: '10px'
+        marginBottom: '10px',
+        width: '100%', // Ensure full width
+        boxSizing: 'border-box',
+        padding: '0 2px' // Add small padding to prevent icons from touching edges
       }}>
         <div 
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            cursor: 'pointer' 
+            cursor: 'pointer',
+            fontSize: isMobile ? '14px' : '16px' // Now isMobile is defined
           }}
           onClick={() => setShowSliders(!showSliders)}
         >
@@ -613,25 +629,35 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           title="Reset to Frame Bounds"
         />
       </div>
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        style={{
-          background: '#222',
-          border: '1px solid #444',
-          borderRadius: '4px',
-          touchAction: 'none' // Prevent default touch actions like scrolling
-        }}
-      />
+      <div style={{ 
+        width: '100%', 
+        display: 'flex', 
+        justifyContent: 'center',
+        boxSizing: 'border-box'
+      }}>
+        <canvas
+          ref={canvasRef}
+          width={width}
+          height={height}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          style={{
+            background: '#222',
+            border: '1px solid #444',
+            borderRadius: '4px',
+            touchAction: 'none',
+            maxWidth: '100%', // Ensure canvas doesn't overflow
+            height: 'auto', // Maintain aspect ratio
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
       {showSliders && renderSliders()}
     </div>
   );

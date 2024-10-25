@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaMagic, FaSlidersH, FaDice, FaRainbow } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
 import SliceControl from './SliceControl';
 import useDebounce from '../hooks/useDebounce';
 
-const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange }) => {
+const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange, isMobile }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [localValue, setLocalValue] = useState(value);
   const debouncedValue = useDebounce(localValue, 16);
@@ -64,9 +64,24 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
   };
 
   return (
-    <div style={{ marginBottom: '15px' }}>
-      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-        {icon && <span style={{ marginRight: '10px' }}>{icon}</span>}
+    <div style={{ 
+      marginBottom: isMobile ? '15px' : '20px',
+      opacity: isDragging ? 1 : 0.9,
+      transition: 'opacity 0.2s ease'
+    }}>
+      <label style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        marginBottom: '8px',
+        fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
+        fontWeight: '500',
+        color: '#ffffff',
+        opacity: 0.9
+      }}>
+        {icon && <span style={{ 
+          marginRight: '10px',
+          color: '#ffffff'
+        }}>{icon}</span>}
         {label}:
       </label>
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -82,19 +97,26 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
           onTouchStart={() => setIsDragging(true)}
           onTouchEnd={handleDragEnd}
           onMouseLeave={handleDragEnd}
-          style={{ flex: 1, marginRight: '10px' }}
+          style={{ flex: 1, marginRight: isMobile ? 0 : '10px' }}
         />
-        <span style={{ minWidth: '50px', textAlign: 'right' }}>
-          {(displayValue || ((v) => v.toFixed(2)))(convertValue ? convertValue(localValue) : localValue)}{unit}
-        </span>
+        {!isMobile && (
+          <span style={{ minWidth: '50px', textAlign: 'right', fontSize: '16px' }}> {/* Updated to 16px */}
+            {(displayValue || ((v) => v.toFixed(2)))(convertValue ? convertValue(localValue) : localValue)}{unit}
+          </span>
+        )}
       </div>
     </div>
   );
 };
 
-const RangeSlider = ({ label, min, max, values, onChange }) => (
+const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
   <div style={{ marginBottom: '15px' }}>
-    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+    <label style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      marginBottom: '5px',
+      fontSize: isMobile ? '14px' : '16px' // Updated to 16px for desktop
+    }}>
       <FaImages style={{ marginRight: '10px' }} />
       {label}:
     </label>
@@ -123,7 +145,7 @@ const RangeSlider = ({ label, min, max, values, onChange }) => (
               borderRadius: '4px',
               background: getTrackBackground({
                 values,
-                colors: ['#ccc', '#548BF4', '#ccc'],
+                colors: ['#333333', '#3498db', '#333333'], // Updated colors
                 min,
                 max
               }),
@@ -142,42 +164,48 @@ const RangeSlider = ({ label, min, max, values, onChange }) => (
             height: '20px',
             width: '20px',
             borderRadius: '4px',
-            backgroundColor: '#FFF',
+            backgroundColor: '#333333', // Darker thumb
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            boxShadow: '0px 2px 6px #AAA'
+            boxShadow: '0px 2px 6px rgba(0,0,0,0.3)',
+            border: '1px solid #404040'
           }}
         >
           <div
             style={{
               height: '16px',
               width: '5px',
-              backgroundColor: isDragged ? '#548BF4' : '#CCC'
+              backgroundColor: isDragged ? '#3498db' : '#666666' // Updated colors
             }}
           />
         </div>
       )}
     />
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      marginTop: '5px',
+      fontSize: isMobile ? '14px' : '16px' // Updated to 16px for desktop
+    }}>
       <span>{values[0].toFixed(0)}%</span>
       <span>{values[1].toFixed(0)}%</span>
     </div>
   </div>
 );
 
-// Export ControlGroup so it can be imported elsewhere
-export const ControlGroup = ({ title, children, headerAction }) => (
-  <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e0e0e0', borderRadius: '5px' }}>
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'center',
-      marginBottom: '10px' 
-    }}>
-      <h4 style={{ margin: 0 }}>{title}</h4>
-      {headerAction}
-    </div>
+// Update the ControlGroup component to accept isMobile prop
+export const ControlGroup = ({ children, isMobile }) => (
+  <div style={{ 
+    marginBottom: isMobile ? '16px' : '0px', // Reduced from 20px to 15px for desktop
+    padding: isMobile ? '12px' : '15px',
+    backgroundColor: '#282c34',
+    borderRadius: '8px',
+    border: '1px solid #404040',
+    width: '100%',
+    boxSizing: 'border-box',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)'
+  }}>
     {children}
   </div>
 );
@@ -193,16 +221,20 @@ const ControlPanel = ({
   onImmediateOpacityChange,
   onImmediateBrightnessChange,
   onImmediateGlobalLightChange,
-  onImmediatePostProcessingChange,
-  onImmediateStackLengthChange,     // Added
-  onImmediateFramePercentageChange, // Added
-  onImmediateSlicePositionChange,   // Added
+  onImmediateStackLengthChange,
+  onImmediateFramePercentageChange,
+  onImmediateSlicePositionChange,
   globalLightIntensity, setGlobalLightIntensity,
   colorMap, setColorMap,
   colorMapParams, setColorMapParams,
-  postProcessing = {},
-  setPostProcessing,
   onClipPlanesChange,
+  exposure, setExposure,
+  contrast, setContrast,
+  onImmediateExposureChange,
+  onImmediateContrastChange,
+  rectangle, // Add this
+  onRectangleChange, // Add this
+  style, // Add this prop
   children
 }) => {
   const convertNonLinear = (value, maxOutput) => {
@@ -237,10 +269,10 @@ const ControlPanel = ({
 
   return (
     <div style={{
-      width: isMobile ? '100%' : '250px',
-      height: isMobile ? (isOpen ? '400px' : '0') : '100%',
-      padding: isMobile ? (isOpen ? '20px' : '0') : '20px',
-      backgroundColor: '#f0f0f0',
+      width: isMobile ? '100%' : '320px',
+      height: isMobile ? (isOpen ? '340px' : '0') : '100%', // Default height
+      padding: isMobile ? (isOpen ? '15px 10px' : '0') : '25px 20px',
+      backgroundColor: '#1a1a1a',
       overflowY: 'auto',
       transition: 'height 0.2s ease-in-out, padding 0.2s ease-in-out',
       boxSizing: 'border-box',
@@ -249,39 +281,62 @@ const ControlPanel = ({
       left: 0,
       right: 0,
       zIndex: 1000,
+      color: '#ffffff',
+      borderLeft: '1px solid #404040',
+      boxShadow: isMobile ? 'none' : '-2px 0 10px rgba(0, 0, 0, 0.2)',
+      ...style // Spread the style prop
     }}>
       {(!isMobile || isOpen) && (
         <>
-          {/* Only show header on desktop */}
           {!isMobile && (
-            <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#333', textAlign: 'center' }}>Control Panel</h3>
+            <h3 style={{ 
+              margin: 0, 
+              marginBottom: '25px', 
+              color: '#ffffff', 
+              textAlign: 'center',
+              fontSize: '20px',
+              fontWeight: '500',
+              letterSpacing: '0.5px',
+              borderBottom: '1px solid #404040',
+              paddingBottom: '15px'
+            }}>Control Panel</h3>
           )}
           
           <div style={{ 
             display: 'flex', 
             flexDirection: isMobile ? 'row' : 'column', 
-            gap: '20px',
+            gap: isMobile ? '8px' : '24px', // Reduced from 25px to 20px for desktop
             height: isMobile ? '100%' : 'auto',
+            maxWidth: '100%',
+            margin: '0 auto',
           }}>
-            {/* Left column - Appearance */}
-            <div style={{ 
-              flex: isMobile ? 1 : 'auto',
-              minWidth: isMobile ? 0 : 'auto',
-              overflowY: isMobile ? 'auto' : 'visible',
-              paddingRight: isMobile ? '10px' : 0,
-              height: isMobile ? '100%' : 'auto',
-            }}>
-              <ControlGroup title="Slice Control">
+            {!isMobile && (
+              // Slice Control section for desktop view
+              <ControlGroup isMobile={isMobile}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
                   <SliceControl
                     width={200}
                     height={200}
                     onClipPlanesChange={onClipPlanesChange}
+                    rectangle={rectangle}
+                    onRectangleChange={onRectangleChange}
+                    isMobile={isMobile}
                   />
                 </div>
               </ControlGroup>
+            )}
 
-              <ControlGroup title="Appearance">
+            {/* Left column - Appearance */}
+            <div style={{ 
+              flex: isMobile ? '0 0 calc(50% - 5px)' : 'auto',
+              minWidth: 0,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              paddingRight: isMobile ? '5px' : 0,
+              height: isMobile ? '100%' : 'auto',
+              boxSizing: 'border-box',
+            }}>
+              <ControlGroup isMobile={isMobile}>
                 <ControlItem
                   icon={<FaEye />}
                   label="Opacity"
@@ -293,6 +348,7 @@ const ControlPanel = ({
                   onImmediateChange={onImmediateOpacityChange}
                   convertValue={convertOpacity}
                   displayValue={(v) => v.toFixed(2)}
+                  isMobile={isMobile}
                 />
                 <ControlItem
                   icon={<FaSun />}
@@ -305,6 +361,29 @@ const ControlPanel = ({
                   onImmediateChange={onImmediateBrightnessChange}
                   convertValue={convertBrightness}
                   displayValue={(v) => v.toFixed(2)}
+                  isMobile={isMobile}
+                />
+                <ControlItem
+                  icon={<FaSun />}
+                  label="Exposure"
+                  value={exposure}
+                  min={0.01}
+                  max={4}
+                  step={0.1}
+                  onChange={setExposure}
+                  onImmediateChange={onImmediateExposureChange}
+                  isMobile={isMobile}
+                />
+                <ControlItem
+                  icon={<FaAdjust />}
+                  label="Contrast"
+                  value={contrast}
+                  min={0.01}
+                  max={4}
+                  step={0.1}
+                  onChange={setContrast}
+                  onImmediateChange={onImmediateContrastChange}
+                  isMobile={isMobile}
                 />
                 <ControlItem
                   icon={<FaLightbulb />}
@@ -315,32 +394,7 @@ const ControlPanel = ({
                   step={0.01}
                   onChange={setGlobalLightIntensity}
                   onImmediateChange={onImmediateGlobalLightChange}
-                />
-                <ControlItem
-                  icon={<FaSun />}
-                  label="Exposure"
-                  value={postProcessing.exposure || 1}
-                  min={0.01}  // Changed from 0 to 0.01
-                  max={4}
-                  step={0.1}
-                  onChange={(value) => setPostProcessing({
-                    ...postProcessing,
-                    exposure: value
-                  })}
-                  onImmediateChange={onImmediatePostProcessingChange('exposure')}
-                />
-                <ControlItem
-                  icon={<FaAdjust />}
-                  label="Contrast"
-                  value={postProcessing.contrast || 1}
-                  min={0.01}  // Changed from 0 to 0.01
-                  max={4}
-                  step={0.1}
-                  onChange={(value) => setPostProcessing({
-                    ...postProcessing,
-                    contrast: value
-                  })}
-                  onImmediateChange={onImmediatePostProcessingChange('contrast')}
+                  isMobile={isMobile}
                 />
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
@@ -350,7 +404,22 @@ const ControlPanel = ({
                   <select 
                     value={blendMode} 
                     onChange={(e) => setBlendMode(parseInt(e.target.value))}
-                    style={{ width: '100%', padding: '5px' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '8px 10px', // More padding
+                      backgroundColor: '#333333',
+                      color: '#ffffff',
+                      border: '1px solid #404040',
+                      borderRadius: '6px',
+                      marginLeft: 0,
+                      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease',
+                      ':hover': {
+                        borderColor: '#3498db'
+                      }
+                    }}
                   >
                     {blendModes.map((mode) => (
                       <option key={mode.value} value={mode.value}>
@@ -370,10 +439,24 @@ const ControlPanel = ({
                     onChange={(e) => {
                       const newColorMap = e.target.value;
                       setColorMap(newColorMap);
-                      // Reset params to defaults when changing color map
                       setColorMapParams(ColorMaps[newColorMap]?.defaultParams || {});
                     }}
-                    style={{ width: '100%', padding: '5px' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '8px 10px', // More padding
+                      backgroundColor: '#333333',
+                      color: '#ffffff',
+                      border: '1px solid #404040',
+                      borderRadius: '6px',
+                      marginLeft: 0,
+                      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
+                      cursor: 'pointer',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease',
+                      ':hover': {
+                        borderColor: '#3498db'
+                      }
+                    }}
                   >
                     {colorMaps.map((map) => (
                       <option key={map.key} value={map.key}>
@@ -408,25 +491,35 @@ const ControlPanel = ({
               </ControlGroup>
             </div>
 
-            {/* Divider (only on mobile) */}
-            {isMobile && (
-              <div style={{
-                width: '1px',
-                backgroundColor: '#ccc',
-                alignSelf: 'stretch',
-                margin: '0 -10px',
-              }} />
-            )}
-
-            {/* Right column - Frame Control and Post Processing */}
+            {/* Right column */}
             <div style={{ 
-              flex: isMobile ? 1 : 'auto',
-              minWidth: isMobile ? 0 : 'auto',
-              overflowY: isMobile ? 'auto' : 'visible',
-              paddingRight: isMobile ? '10px' : 0,
+              flex: isMobile ? '0 0 calc(50% - 5px)' : 'auto',
+              minWidth: 0,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              paddingLeft: isMobile ? '5px' : 0,
               height: isMobile ? '100%' : 'auto',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
             }}>
-              <ControlGroup title="Frame Control">
+              {isMobile && (
+                // Slice Control section for mobile view
+                <ControlGroup isMobile={isMobile}>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+                    <SliceControl
+                      width={200}
+                      height={200}
+                      onClipPlanesChange={onClipPlanesChange}
+                      rectangle={rectangle}
+                      onRectangleChange={onRectangleChange}
+                      isMobile={isMobile}
+                    />
+                  </div>
+                </ControlGroup>
+              )}
+
+              <ControlGroup isMobile={isMobile}>
                 <ControlItem
                   icon={<FaLayerGroup />}
                   label="Stack Length"
@@ -436,6 +529,7 @@ const ControlPanel = ({
                   step={0.01}
                   onChange={setStackLength}
                   onImmediateChange={onImmediateStackLengthChange}
+                  isMobile={isMobile}
                 />
                 <ControlItem
                   icon={<FaImages />}
@@ -447,6 +541,7 @@ const ControlPanel = ({
                   onChange={setFramePercentage}
                   onImmediateChange={onImmediateFramePercentageChange}
                   unit="%"
+                  isMobile={isMobile}
                 />
                 <RangeSlider
                   label="Slice Range"
@@ -454,6 +549,7 @@ const ControlPanel = ({
                   max={100}
                   values={sliceRange}
                   onChange={setSliceRange}
+                  isMobile={isMobile}
                 />
                 <ControlItem
                   icon={<FaArrowsAltH />}
@@ -465,142 +561,8 @@ const ControlPanel = ({
                   onChange={handleSlicePositionChange}
                   onImmediateChange={onImmediateSlicePositionChange}
                   unit="%"
+                  isMobile={isMobile}
                 />
-              </ControlGroup>
-              <ControlGroup title="Post Processing">
-                {/* Image Processing Controls */}
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <FaMagic style={{ marginRight: '10px' }} />
-                    Bloom Effect:
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={postProcessing.bloomEnabled}
-                      onChange={(e) => setPostProcessing({
-                        ...postProcessing,
-                        bloomEnabled: e.target.checked
-                      })}
-                    />
-                  </div>
-                  {postProcessing.bloomEnabled && (
-                    <>
-                      <ControlItem
-                        label="Bloom Threshold"
-                        value={postProcessing.bloomThreshold || 0.8}
-                        min={0.01}  // Changed from 0 to 0.01
-                        max={1}
-                        step={0.1}
-                        onChange={(value) => setPostProcessing({
-                          ...postProcessing,
-                          bloomThreshold: value
-                        })}
-                      />
-                      <ControlItem
-                        label="Bloom Weight"
-                        value={postProcessing.bloomWeight || 0.3}
-                        min={0.01}  // Changed from 0 to 0.01
-                        max={1}
-                        step={0.1}
-                        onChange={(value) => setPostProcessing({
-                          ...postProcessing,
-                          bloomWeight: value
-                        })}
-                      />
-                    </>
-                  )}
-                </div>
-
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <FaSlidersH style={{ marginRight: '10px' }} />
-                    Sharpen Effect:
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={postProcessing.sharpenEnabled}
-                      onChange={(e) => setPostProcessing({
-                        ...postProcessing,
-                        sharpenEnabled: e.target.checked
-                      })}
-                    />
-                  </div>
-                  {postProcessing.sharpenEnabled && (
-                    <ControlItem
-                      label="Sharpen Amount"
-                      value={postProcessing.sharpenAmount || 0.3}
-                      min={0.01}  // Changed from 0 to 0.01
-                      max={1}
-                      step={0.1}
-                      onChange={(value) => setPostProcessing({
-                        ...postProcessing,
-                        sharpenAmount: value
-                      })}
-                    />
-                  )}
-                </div>
-
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <FaDice style={{ marginRight: '10px' }} />
-                    Grain Effect:
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={postProcessing.grainEnabled}
-                      onChange={(e) => setPostProcessing({
-                        ...postProcessing,
-                        grainEnabled: e.target.checked
-                      })}
-                    />
-                  </div>
-                  {postProcessing.grainEnabled && (
-                    <ControlItem
-                      label="Grain Intensity"
-                      value={postProcessing.grainIntensity || 10}
-                      min={0.01}  // Changed from 0 to 0.01
-                      max={50}
-                      step={1}
-                      onChange={(value) => setPostProcessing({
-                        ...postProcessing,
-                        grainIntensity: value
-                      })}
-                    />
-                  )}
-                </div>
-
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <FaRainbow style={{ marginRight: '10px' }} />
-                    Chromatic Aberration:
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={postProcessing.chromaticAberrationEnabled}
-                      onChange={(e) => setPostProcessing({
-                        ...postProcessing,
-                        chromaticAberrationEnabled: e.target.checked
-                      })}
-                    />
-                  </div>
-                  {postProcessing.chromaticAberrationEnabled && (
-                    <ControlItem
-                      label="Aberration Amount"
-                      value={postProcessing.chromaticAberrationAmount || 30}
-                      min={0.01}  // Changed from 0 to 0.01
-                      max={100}
-                      step={1}
-                      onChange={(value) => setPostProcessing({
-                        ...postProcessing,
-                        chromaticAberrationAmount: value
-                      })}
-                    />
-                  )}
-                </div>
               </ControlGroup>
             </div>
           </div>
