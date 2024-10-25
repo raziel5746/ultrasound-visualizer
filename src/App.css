@@ -31,6 +31,7 @@ html, body, #root, .App {
   overflow: hidden;
   justify-content: center;
   align-items: center;
+  background-color: #121622;
 }
 
 main {
@@ -84,24 +85,47 @@ input[type="file"] {
 
 .welcome-screen {
   text-align: center;
-  padding: 20px;
-  max-width: 400px;
-  width: 100%;
-  background-color: #282c34;
+  padding: 40px;
+  max-width: 600px;
+  width: 90%;
+  background-color: #1e2130;
   color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.welcome-screen h1 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  color: #3498db;
+}
+
+.welcome-screen p {
+  font-size: 1.1rem;
+  margin-bottom: 30px;
+  color: #a0aec0;
+  line-height: 1.6;
 }
 
 .choose-file-btn {
-  padding: 10px 20px;
-  font-size: 16px;
-  background-color: #4CAF50;
+  padding: 12px 24px;
+  font-size: 1rem;
+  background-color: #3498db;
   color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .choose-file-btn:hover {
-  background-color: #45a049;
+  background-color: #2980b9;
+  transform: translateY(-2px);
+}
+
+.choose-file-btn:active {
+  transform: translateY(0);
 }

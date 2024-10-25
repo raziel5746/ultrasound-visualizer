@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import './App.css';
 import UltrasoundVisualizer from './UltrasoundVisualizer';
+import { FaFileUpload } from 'react-icons/fa';
 
 function App() {
   const [videoUrl, setVideoUrl] = useState(null);
@@ -34,10 +35,11 @@ function App() {
         />
         {!videoUrl ? (
           <div className="welcome-screen">
-            <h2>Welcome to Ultrasound Visualizer</h2>
-            <p>Please choose a video file to begin.</p>
+            <h1>Ultrasound Visualizer</h1>
+            <p>Upload a video file to begin your 3D ultrasound visualization experience.</p>
             <button onClick={handleChooseFile} className="choose-file-btn">
-              Choose File
+              <FaFileUpload style={{ marginRight: '10px' }} />
+              Select Video File
             </button>
           </div>
         ) : (
