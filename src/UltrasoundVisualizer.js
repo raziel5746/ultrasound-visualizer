@@ -400,24 +400,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     };
   }, [textureAtlas, colorMap, colorMapParams, throttledUpdateFrameStack]);
 
-  // Replace the handleImmediatePostProcessingChange function
-  const handleImmediatePostProcessingChange = useCallback((key) => {
-    return (value) => {
-      // Update state
-      setPostProcessing(prev => ({
-        ...prev,
-        [key]: value
-      }));
-
-      // Update scene immediately without debounce
-      if (sceneManagerRef.current) {
-        sceneManagerRef.current.updatePostProcessing({
-          [key]: value
-        });
-      }
-    };
-  }, []);
-
   useEffect(() => {
     throttledUpdateFrameStack();
   }, [opacity, brightness, throttledUpdateFrameStack]);
@@ -542,66 +524,24 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     throttledUpdateFrameStack();
   }, [brightness, opacity, blendMode, throttledUpdateFrameStack]);
 
-  // In UltrasoundVisualizer.js, add new state:
-  const [postProcessing, setPostProcessing] = useState({
-    exposure: 1,
-    contrast: 1,
-    bloomEnabled: true,
-    bloomThreshold: 0.8,
-    bloomWeight: 0.3,
-    sharpenEnabled: true,
-    sharpenAmount: 0.3,
-    grainEnabled: false,
-    grainIntensity: 10,
-    chromaticAberrationEnabled: false,
-    chromaticAberrationAmount: 30,
-  });
+  // Add these state declarations near the other useState declarations
+  const [exposure, setExposure] = useState(1);
+  const [contrast, setContrast] = useState(1);
 
-  // Add this near the other useRef declarations
-  const postProcessingUpdateTimeout = useRef(null);
-
-  // Update the useEffect for post-processing
-  useEffect(() => {
-    // Only update on mount and when switching features on/off
+  // Add these handlers near the other handleImmediateUpdate handlers
+  const onImmediateExposureChange = useCallback((value) => {
+    setExposure(value);
     if (sceneManagerRef.current) {
-      const relevantChanges = {
-        bloomEnabled: postProcessing.bloomEnabled,
-        sharpenEnabled: postProcessing.sharpenEnabled,
-        grainEnabled: postProcessing.grainEnabled,
-        chromaticAberrationEnabled: postProcessing.chromaticAberrationEnabled
-      };
-      sceneManagerRef.current.updatePostProcessing(relevantChanges);
+      sceneManagerRef.current.updateExposure(value);
     }
-  }, [
-    postProcessing.bloomEnabled,
-    postProcessing.sharpenEnabled,
-    postProcessing.grainEnabled,
-    postProcessing.chromaticAberrationEnabled
-  ]);
-
-  // Add cleanup
-  useEffect(() => {
-    const currentTimeout = postProcessingUpdateTimeout.current;
-    return () => {
-      if (currentTimeout) {
-        clearTimeout(currentTimeout);
-      }
-    };
   }, []);
 
-  // Add this effect to initialize clip planes
-  useEffect(() => {
-    if (textureAtlas && sceneManagerRef.current) {
-      // Initialize with default clip planes (fully visible)
-      sceneManagerRef.current.updateClipPlanes({
-        top: 1,
-        bottom: -1,
-        left: -1,
-        right: 1
-      });
-      updateFrameStack();
+  const onImmediateContrastChange = useCallback((value) => {
+    setContrast(value);
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.updateContrast(value);
     }
-  }, [textureAtlas, updateFrameStack]);
+  }, []);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
@@ -832,22 +772,24 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: isControlPanelOpen ? '400px' : 0, // Match the control panel height
+            bottom: isControlPanelOpen ? '400px' : 0,
             left: 0,
             right: 0,
-            backgroundColor: '#f0f0f0',
+            backgroundColor: '#282c34', // Dark background to match theme
             padding: '10px',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             cursor: 'pointer',
-            boxShadow: '0 -2px 5px rgba(0,0,0,0.1)',
-            zIndex: 1001, // Higher than the control panel's z-index (1000)
-            transition: 'bottom 0.2s ease-in-out', // Smooth transition
+            boxShadow: '0 -2px 5px rgba(0,0,0,0.2)',
+            zIndex: 1001,
+            transition: 'bottom 0.2s ease-in-out',
+            color: '#ffffff', // Light text
+            borderTop: '1px solid #404040' // Subtle border
           }}
           onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
         >
-          <FaCog style={{ marginRight: '10px' }} />
+          <FaCog style={{ marginRight: '10px', color: '#3498db' }} /> {/* Blue accent color for icon */}
           {isControlPanelOpen ? 'Hide Controls' : 'Show Controls'}
         </div>
       )}
@@ -874,10 +816,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         setColorMap={setColorMap}
         colorMapParams={colorMapParams}
         setColorMapParams={setColorMapParams}
-        postProcessing={postProcessing}
-        setPostProcessing={setPostProcessing}
         onImmediateGlobalLightChange={handleImmediateUpdate(setGlobalLightIntensity)}
-        onImmediatePostProcessingChange={handleImmediatePostProcessingChange}
         onClipPlanesChange={handleClipPlanesChange}
         onImmediateStackLengthChange={handleImmediateUpdate(setStackLength)}
         onImmediateFramePercentageChange={handleImmediateUpdate(setFramePercentage)}
@@ -888,6 +827,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
           handleSliceRangeChange([newStart, newEnd]);
           updateFrameStack();
         }}
+        exposure={exposure}
+        setExposure={setExposure}
+        contrast={contrast}
+        setContrast={setContrast}
+        onImmediateExposureChange={onImmediateExposureChange}
+        onImmediateContrastChange={onImmediateContrastChange}
       >
         <ControlGroup title="Slice Control">
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

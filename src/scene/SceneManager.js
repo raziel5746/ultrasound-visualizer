@@ -325,6 +325,19 @@ class SceneManager {
   hasMeshes() {
     return this.scene.meshes.length > 0;
   }
+
+  // Add these methods to the SceneManager class
+  updateExposure(value) {
+    if (this.defaultPipeline) {
+      this.defaultPipeline.imageProcessing.exposure = value;
+    }
+  }
+
+  updateContrast(value) {
+    if (this.defaultPipeline) {
+      this.defaultPipeline.imageProcessing.contrast = value;
+    }
+  }
 }
 
 export default SceneManager;

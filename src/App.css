@@ -3,6 +3,8 @@ html, body, #root, .App {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  background-color: #1a1a1a;
+  color: #ffffff;
 }
 
 .App {
@@ -41,53 +43,26 @@ select {
   margin: 10px;
   padding: 10px;
   font-size: 16px;
-}
-
-canvas {
-  max-width: 100%;
-  height: auto;
-}
-
-@media (max-width: 768px) {
-  input[type="file"],
-  button,
-  select {
-    font-size: 14px;
-  }
-}
-
-.light-mode {
-  background-color: #ffffff;
-  color: #000000;
-}
-
-.dark-mode {
-  background-color: #1a1a1a;
-  color: #ffffff;
-}
-
-.dark-mode input[type="file"],
-.dark-mode button,
-.dark-mode select {
   background-color: #333333;
   color: #ffffff;
   border: 1px solid #555555;
 }
 
-.dark-mode input[type="range"] {
+input[type="range"] {
   background-color: #333333;
 }
 
-.dark-mode input[type="checkbox"] {
+input[type="checkbox"] {
   accent-color: #ffffff;
 }
 
 div[ref] {
   flex-grow: 1;
   height: 100%;
-  border: 1px solid #ccc;
+  border: 1px solid #555555;
   border-radius: 4px;
   overflow: hidden;
+  background-color: #282c34;
 }
 
 h1 {
@@ -99,7 +74,7 @@ input[type="file"] {
 }
 
 .error {
-  color: red;
+  color: #ff6b6b;
 }
 
 @keyframes spin {
@@ -112,6 +87,8 @@ input[type="file"] {
   padding: 20px;
   max-width: 400px;
   width: 100%;
+  background-color: #282c34;
+  color: #ffffff;
 }
 
 .choose-file-btn {

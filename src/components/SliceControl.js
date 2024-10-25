@@ -589,18 +589,22 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
 
   // Update the canvas element to include touch events
   return (
-    <div>
+    <div style={{ width: '100%', boxSizing: 'border-box' }}> {/* Added width and boxSizing */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        marginBottom: '10px'
+        marginBottom: '10px',
+        width: '100%', // Ensure full width
+        boxSizing: 'border-box',
+        padding: '0 2px' // Add small padding to prevent icons from touching edges
       }}>
         <div 
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            cursor: 'pointer' 
+            cursor: 'pointer',
+            fontSize: '14px' // Slightly smaller text on mobile
           }}
           onClick={() => setShowSliders(!showSliders)}
         >
@@ -613,25 +617,35 @@ const SliceControl = ({ width = 200, height = 200, onClipPlanesChange }) => {
           title="Reset to Frame Bounds"
         />
       </div>
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        style={{
-          background: '#222',
-          border: '1px solid #444',
-          borderRadius: '4px',
-          touchAction: 'none' // Prevent default touch actions like scrolling
-        }}
-      />
+      <div style={{ 
+        width: '100%', 
+        display: 'flex', 
+        justifyContent: 'center',
+        boxSizing: 'border-box'
+      }}>
+        <canvas
+          ref={canvasRef}
+          width={width}
+          height={height}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          style={{
+            background: '#222',
+            border: '1px solid #444',
+            borderRadius: '4px',
+            touchAction: 'none',
+            maxWidth: '100%', // Ensure canvas doesn't overflow
+            height: 'auto', // Maintain aspect ratio
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
       {showSliders && renderSliders()}
     </div>
   );
