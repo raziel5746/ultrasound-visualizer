@@ -66,21 +66,21 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
   return (
     <div style={{ 
       marginBottom: isMobile ? '15px' : '20px',
-      opacity: isDragging ? 1 : 0.9, // Add subtle hover effect
+      opacity: isDragging ? 1 : 0.9,
       transition: 'opacity 0.2s ease'
     }}>
       <label style={{ 
         display: 'flex', 
         alignItems: 'center', 
         marginBottom: '8px',
-        fontSize: isMobile ? '14px' : '15px',
+        fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
         fontWeight: '500',
         color: '#ffffff',
         opacity: 0.9
       }}>
         {icon && <span style={{ 
           marginRight: '10px',
-          color: '#ffffff' // Changed from #3498db back to white
+          color: '#ffffff'
         }}>{icon}</span>}
         {label}:
       </label>
@@ -99,8 +99,8 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
           onMouseLeave={handleDragEnd}
           style={{ flex: 1, marginRight: isMobile ? 0 : '10px' }}
         />
-        {!isMobile && ( // Only show the number in desktop view
-          <span style={{ minWidth: '50px', textAlign: 'right' }}>
+        {!isMobile && (
+          <span style={{ minWidth: '50px', textAlign: 'right', fontSize: '16px' }}> {/* Updated to 16px */}
             {(displayValue || ((v) => v.toFixed(2)))(convertValue ? convertValue(localValue) : localValue)}{unit}
           </span>
         )}
@@ -109,9 +109,14 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
   );
 };
 
-const RangeSlider = ({ label, min, max, values, onChange }) => (
+const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
   <div style={{ marginBottom: '15px' }}>
-    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+    <label style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      marginBottom: '5px',
+      fontSize: isMobile ? '14px' : '16px' // Updated to 16px for desktop
+    }}>
       <FaImages style={{ marginRight: '10px' }} />
       {label}:
     </label>
@@ -177,7 +182,12 @@ const RangeSlider = ({ label, min, max, values, onChange }) => (
         </div>
       )}
     />
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      marginTop: '5px',
+      fontSize: isMobile ? '14px' : '16px' // Updated to 16px for desktop
+    }}>
       <span>{values[0].toFixed(0)}%</span>
       <span>{values[1].toFixed(0)}%</span>
     </div>
@@ -218,11 +228,13 @@ const ControlPanel = ({
   colorMap, setColorMap,
   colorMapParams, setColorMapParams,
   onClipPlanesChange,
-  // Add these new props
   exposure, setExposure,
   contrast, setContrast,
   onImmediateExposureChange,
   onImmediateContrastChange,
+  rectangle, // Add this
+  onRectangleChange, // Add this
+  style, // Add this prop
   children
 }) => {
   const convertNonLinear = (value, maxOutput) => {
@@ -257,9 +269,9 @@ const ControlPanel = ({
 
   return (
     <div style={{
-      width: isMobile ? '100%' : '320px', // Slightly wider
-      height: isMobile ? (isOpen ? '400px' : '0') : '100%',
-      padding: isMobile ? (isOpen ? '15px 10px' : '0') : '25px 20px', // More padding on desktop
+      width: isMobile ? '100%' : '320px',
+      height: isMobile ? (isOpen ? '340px' : '0') : '100%', // Default height
+      padding: isMobile ? (isOpen ? '15px 10px' : '0') : '25px 20px',
       backgroundColor: '#1a1a1a',
       overflowY: 'auto',
       transition: 'height 0.2s ease-in-out, padding 0.2s ease-in-out',
@@ -271,7 +283,8 @@ const ControlPanel = ({
       zIndex: 1000,
       color: '#ffffff',
       borderLeft: '1px solid #404040',
-      boxShadow: isMobile ? 'none' : '-2px 0 10px rgba(0, 0, 0, 0.2)' // Add shadow on desktop
+      boxShadow: isMobile ? 'none' : '-2px 0 10px rgba(0, 0, 0, 0.2)',
+      ...style // Spread the style prop
     }}>
       {(!isMobile || isOpen) && (
         <>
@@ -383,7 +396,7 @@ const ControlPanel = ({
                       border: '1px solid #404040',
                       borderRadius: '6px',
                       marginLeft: 0,
-                      fontSize: '14px',
+                      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
                       cursor: 'pointer',
                       outline: 'none',
                       transition: 'border-color 0.2s ease',
@@ -420,7 +433,7 @@ const ControlPanel = ({
                       border: '1px solid #404040',
                       borderRadius: '6px',
                       marginLeft: 0,
-                      fontSize: '14px',
+                      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
                       cursor: 'pointer',
                       outline: 'none',
                       transition: 'border-color 0.2s ease',
@@ -480,6 +493,9 @@ const ControlPanel = ({
                     width={200}
                     height={200}
                     onClipPlanesChange={onClipPlanesChange}
+                    rectangle={rectangle}
+                    onRectangleChange={onRectangleChange}
+                    isMobile={isMobile} // Make sure this line is present
                   />
                 </div>
               </ControlGroup>
@@ -514,6 +530,7 @@ const ControlPanel = ({
                   max={100}
                   values={sliceRange}
                   onChange={setSliceRange}
+                  isMobile={isMobile}
                 />
                 <ControlItem
                   icon={<FaArrowsAltH />}

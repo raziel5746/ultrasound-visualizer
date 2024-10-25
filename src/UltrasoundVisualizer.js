@@ -543,6 +543,14 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, []);
 
+  // Add this state near other state declarations
+  const [sliceRectangle, setSliceRectangle] = useState(null);
+
+  // Add this handler
+  const handleSliceRectangleChange = useCallback((newRectangle) => {
+    setSliceRectangle(newRectangle);
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -772,10 +780,10 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: isControlPanelOpen ? '400px' : 0,
+            bottom: isControlPanelOpen ? '340px' : 0, // Changed from 400px to 340px
             left: 0,
             right: 0,
-            backgroundColor: '#282c34', // Dark background to match theme
+            backgroundColor: '#282c34',
             padding: '10px',
             display: 'flex',
             justifyContent: 'center',
@@ -784,12 +792,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
             boxShadow: '0 -2px 5px rgba(0,0,0,0.2)',
             zIndex: 1001,
             transition: 'bottom 0.2s ease-in-out',
-            color: '#ffffff', // Light text
-            borderTop: '1px solid #404040' // Subtle border
+            color: '#ffffff',
+            borderTop: '1px solid #404040'
           }}
           onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
         >
-          <FaCog style={{ marginRight: '10px', color: '#3498db' }} /> {/* Blue accent color for icon */}
+          <FaCog style={{ marginRight: '10px', color: '#3498db' }} />
           {isControlPanelOpen ? 'Hide Controls' : 'Show Controls'}
         </div>
       )}
@@ -833,13 +841,20 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         setContrast={setContrast}
         onImmediateExposureChange={onImmediateExposureChange}
         onImmediateContrastChange={onImmediateContrastChange}
+        rectangle={sliceRectangle}
+        onRectangleChange={handleSliceRectangleChange}
+        style={{
+          height: isMobile ? (isControlPanelOpen ? '340px' : '0') : '100%',
+        }}
       >
-        <ControlGroup title="Slice Control">
+        <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
             <SliceControl
               width={200}
               height={200}
               onClipPlanesChange={handleClipPlanesChange}
+              rectangle={sliceRectangle}
+              onRectangleChange={handleSliceRectangleChange}
             />
           </div>
         </ControlGroup>
