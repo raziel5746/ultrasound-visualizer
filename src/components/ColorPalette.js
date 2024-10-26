@@ -2,7 +2,7 @@ import React from 'react';
 
 const ColorPalette = ({ colors, selectedColor, onColorSelect }) => {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
       {colors.map((color, index) => (
         <div
           key={index}
