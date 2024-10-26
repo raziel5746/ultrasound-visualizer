@@ -27,8 +27,6 @@ class TextureAtlas {
       console.warn(`Limited texture size detected: ${this.maxSize}px. Performance may be affected.`);
     }
     
-    console.log(`Using maximum texture size: ${this.maxSize}px`);
-    
     this.atlas = null;
     this.frames = [];
     this.uvCoordinates = [];
@@ -57,8 +55,6 @@ class TextureAtlas {
         ({ width, height } = this.calculateOptimalAtlasSize(frameCanvases, scale));
       }
     }
-
-    console.log(`Creating texture atlas with size: ${width}x${height}, scale: ${scale}`);
 
     const atlas = new BABYLON.DynamicTexture('atlas', { width, height }, this.scene, false);
     const ctx = atlas.getContext();

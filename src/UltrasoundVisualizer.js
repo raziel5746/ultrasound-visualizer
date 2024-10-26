@@ -379,7 +379,6 @@ const UltrasoundVisualizer = ({
     });
   }, [maxDimensions, externalRectangle, isResolutionChange]); // Add these dependencies
 
-  // Add console.log in the video loading effect
   useEffect(() => {
     if (!videoUrl) {
       setError('No video URL provided');
@@ -414,12 +413,6 @@ const UltrasoundVisualizer = ({
     setExtractionProgress(0);
     setTotalFrames(0);
     setRenderedFrames(0);
-
-    console.log('Video loading effect - Setting states:', {
-      isLocalLoading: true,
-      showExtractionScreen: !isResolutionChange.current,
-      isResolutionChange: isResolutionChange.current
-    });
 
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -794,12 +787,6 @@ const UltrasoundVisualizer = ({
     setTotalFrames(0);
     setRenderedFrames(0);
 
-    console.log('Video loading effect - Setting states:', {
-      isLocalLoading: true,
-      showExtractionScreen: !isResolutionChange.current,
-      isResolutionChange: isResolutionChange.current
-    });
-
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.muted = true;
@@ -1138,7 +1125,6 @@ const UltrasoundVisualizer = ({
 
         {/* Loading screen remains the same */}
         {isLocalLoading && showExtractionScreen && (
-          console.log('Render - States:', { isLocalLoading, showExtractionScreen }),
           <div style={{
             position: 'absolute',
             top: 0,
