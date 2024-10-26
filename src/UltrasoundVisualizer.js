@@ -866,32 +866,268 @@ const UltrasoundVisualizer = ({
           borderRadius: '5px',
           zIndex: 1000,
         }}>
-          {/* File name at the top */}
+          {/* File name row with folder icon and HD button */}
           <div style={{
-            color: 'white',
-            textAlign: 'center',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             padding: '5px 0',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
             marginBottom: '10px',
             borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+            position: 'relative',
           }}>
-            {fileName}
+            {/* Folder icon on the left */}
+            <FaFolderOpen 
+              style={{ 
+                fontSize: '24px',
+                cursor: 'pointer', 
+                color: 'white',
+                position: 'absolute',
+                left: 0,
+              }} 
+              onClick={handleFileSelect}
+              title="Choose New File"
+            />
+            
+            {/* Centered filename */}
+            <div style={{
+              flex: 1,
+              textAlign: 'center',
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              padding: '0 45px', // Increased padding to accommodate larger HD button
+            }}>
+              {fileName}
+            </div>
+
+            {/* HD/SD Toggle Button - moved to top right */}
+            {isHDAvailable && (
+              <div 
+                style={{ 
+                  width: '38px', // Increased from 32px (1.2 times larger)
+                  height: '38px', // Increased from 32px (1.2 times larger)
+                  borderRadius: '50%',
+                  position: 'absolute',
+                  right: 0,
+                  cursor: isLocalLoading ? 'default' : 'pointer',
+                  userSelect: 'none',
+                }} 
+                onClick={isLocalLoading ? undefined : handleResolutionToggle}
+                title={isLocalLoading ? 'Processing...' : `Switch to ${isHDMode ? 'SD' : 'HD'} mode`}
+              >
+                {/* Background circle */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  backgroundColor: isHDMode ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                }} />
+
+                {/* Progress circle - replaced with SVG */}
+                {isLocalLoading && (
+                  <svg
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      transform: 'rotate(-90deg)',
+                      filter: 'drop-shadow(0 0 2px rgba(52, 152, 219, 0.5))'
+                    }}
+                    width="38"
+                    height="38"
+                    viewBox="0 0 38 38"
+                  >
+                    <circle
+                      cx="19"
+                      cy="19"
+                      r="18"
+                      fill="none"
+                      stroke="#3498db"
+                      strokeWidth="2"
+                      strokeDasharray={`${extractionProgress * 113.04} 113.04`} // Updated circumference for larger circle
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                )}
+
+                {/* HD text */}
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, calc(-50% - 1px))',
+                  color: isHDMode ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+                  fontSize: '19px', // Increased from 16px (proportionally larger)
+                  fontWeight: 'bold',
+                  opacity: isLocalLoading ? 0.5 : 1,
+                  transition: 'opacity 0.3s ease',
+                }}>
+                  HD
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Controls container */}
           <div style={{
             display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
             justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
+            alignItems: isMobile ? 'stretch' : 'center',
           }}>
-            {/* Left section */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: isMobile ? '10px' : '0' }}>
-              {isMobile ? (
+            {/* Desktop layout - Action icons on the left */}
+            {!isMobile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <FaUndoAlt 
+                  style={{ cursor: 'pointer', color: 'white' }} 
+                  onClick={resetCamera}
+                  title="Reset Camera"
+                />
+                <FaExchangeAlt 
+                  style={{ cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
+                  onClick={toggleFrameOrderInversion}
+                  title="Invert Frame Order"
+                />
+                <FaRedo
+                  style={{ cursor: 'pointer', color: 'white' }}
+                  onClick={resetToDefaults}
+                  title="Reset to Defaults"
+                />
+                <FaList
+                  style={{ cursor: 'pointer', color: 'white' }}
+                  onClick={() => setShowPresets(!showPresets)}
+                  title="Presets"
+                />
+              </div>
+            )}
+
+            {/* Central info section */}
+            <div style={{ 
+              color: 'white', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: isMobile ? 'space-between' : 'center', // Changed for mobile
+              marginBottom: isMobile ? '15px' : '0',
+              width: isMobile ? '100%' : 'auto', // Added width for mobile
+              gap: isMobile ? '10px' : '20px' // Reduced gap for mobile
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <FaImages style={{ marginRight: '8px' }} />
+                <span>{renderedFrames}</span>
+              </div>
+
+              {videoInfo.originalWidth > 0 && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: isMobile ? '10px' : '15px', // Reduced gap for mobile
+                  fontSize: '14px',
+                  color: '#a0aec0'
+                }}>
+                  <div title="Original Resolution">
+                    {videoInfo.originalWidth}×{videoInfo.originalHeight}
+                  </div>
+                  <div style={{ color: '#3498db' }} title="Scaling Factor">
+                    →{videoInfo.scaleFactor}×
+                  </div>
+                  <div title="Scaled Resolution">
+                    {videoInfo.scaledWidth}×{videoInfo.scaledHeight}
+                  </div>
+                </div>
+              )}
+
+              <div style={{
+                color: '#3498db',
+                fontSize: '14px',
+                fontWeight: 'bold',
+              }}>
+                {targetFps} FPS
+              </div>
+            </div>
+
+            {/* Desktop layout - Color palette on the right */}
+            {!isMobile && (
+              <div style={{ display: 'flex', alignItems: 'center' }}> {/* Removed marginBottom */}
+                <ColorPalette
+                  colors={backgroundColors}
+                  selectedColor={backgroundColor}
+                  onColorSelect={setBackgroundColor}
+                />
+              </div>
+            )}
+
+            {/* Mobile layout - Bottom row with action icons and color palette */}
+            {isMobile && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                {/* Left side - Action icons */}
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <FaUndoAlt 
+                    style={{ cursor: 'pointer', color: 'white' }} 
+                    onClick={resetCamera}
+                    title="Reset Camera"
+                  />
+                  <FaExchangeAlt 
+                    style={{ cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
+                    onClick={toggleFrameOrderInversion}
+                    title="Invert Frame Order"
+                  />
+                  <FaRedo
+                    style={{ cursor: 'pointer', color: 'white' }}
+                    onClick={resetToDefaults}
+                    title="Reset to Defaults"
+                  />
+                  <div style={{ position: 'relative' }}>
+                    <FaList
+                      style={{ cursor: 'pointer', color: 'white' }}
+                      onClick={() => setShowPresets(!showPresets)}
+                      title="Presets"
+                    />
+                    {showPresets && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        right: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                        borderRadius: '5px',
+                        padding: '10px',
+                        marginBottom: '5px',
+                        zIndex: 1,
+                      }}>
+                        {presets.map((preset, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              color: 'white',
+                              padding: '5px 10px',
+                              cursor: 'pointer',
+                              borderRadius: '3px',
+                              transition: 'background-color 0.2s',
+                              whiteSpace: 'nowrap',
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                            onClick={() => applyPreset(preset.settings)}
+                          >
+                            {preset.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right side - Color palette */}
                 <div style={{ position: 'relative' }}>
                   <div
                     style={{
@@ -911,7 +1147,7 @@ const UltrasoundVisualizer = ({
                     style={{
                       position: 'absolute',
                       top: '100%',
-                      left: '0',
+                      right: '0', // Changed from left: '0' to right: '0'
                       marginTop: '5px',
                       backgroundColor: 'rgba(0, 0, 0, 0.9)',
                       borderRadius: '5px',
@@ -920,6 +1156,7 @@ const UltrasoundVisualizer = ({
                       opacity: '0',
                       overflow: 'hidden',
                       transition: 'max-height 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                      zIndex: 1,
                     }}
                   >
                     <ColorPalette
@@ -932,186 +1169,8 @@ const UltrasoundVisualizer = ({
                     />
                   </div>
                 </div>
-              ) : (
-                <ColorPalette
-                  colors={backgroundColors}
-                  selectedColor={backgroundColor}
-                  onColorSelect={setBackgroundColor}
-                />
-              )}
-              <FaFolderOpen 
-                style={{ marginLeft: '15px', cursor: 'pointer', color: 'white' }} 
-                onClick={handleFileSelect}
-                title="Choose New File"
-              />
-            </div>
-            
-            {/* Middle section */}
-            <div style={{ 
-              color: 'white', 
-              display: 'flex', 
-              alignItems: 'center', 
-              marginBottom: isMobile ? '10px' : '0',
-              gap: '20px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <FaImages style={{ marginRight: '8px' }} />
-                <span>Frames: {renderedFrames}</span>
               </div>
-
-              {/* Add resolution info */}
-              {videoInfo.originalWidth > 0 && (
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: '15px',
-                  fontSize: '14px',
-                  color: '#a0aec0'
-                }}>
-                  <div title="Original Resolution">
-                    {videoInfo.originalWidth}×{videoInfo.originalHeight}
-                  </div>
-                  <div style={{ color: '#3498db' }} title="Scaling Factor">
-                    →{videoInfo.scaleFactor}×
-                  </div>
-                  <div title="Scaled Resolution">
-                    {videoInfo.scaledWidth}×{videoInfo.scaledHeight}
-                  </div>
-                </div>
-              )}
-
-              {/* FPS Badge */}
-              <div style={{
-                backgroundColor: '#3498db',
-                color: 'white',
-                padding: '4px 12px',
-                borderRadius: '15px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '80px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-              }}>
-                {targetFps} FPS
-              </div>
-
-              {/* HD/SD Toggle Button */}
-              {isHDAvailable && (
-                <div 
-                  style={{ 
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    position: 'relative',
-                    cursor: isLocalLoading ? 'default' : 'pointer',
-                    marginLeft: '10px',
-                    userSelect: 'none',
-                  }} 
-                  onClick={isLocalLoading ? undefined : handleResolutionToggle}
-                  title={isLocalLoading ? 'Processing...' : `Switch to ${isHDMode ? 'SD' : 'HD'} mode`}
-                >
-                  {/* Background circle */}
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '50%',
-                    border: `2px solid ${isHDMode ? '#ffffff' : 'rgba(255, 255, 255, 0.5)'}`,
-                    backgroundColor: isHDMode ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                  }} />
-
-                  {/* Progress circle */}
-                  {isLocalLoading && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      border: '2px solid #3498db',
-                      clipPath: `polygon(50% 50%, -50% -50%, ${Math.cos(extractionProgress * Math.PI * 2 - Math.PI/2) * 100 + 50}% ${Math.sin(extractionProgress * Math.PI * 2 - Math.PI/2) * 100 + 50}%)`,
-                      transform: 'rotate(-90deg)',
-                      transition: 'clip-path 0.1s ease',
-                    }} />
-                  )}
-
-                  {/* HD text */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    color: isHDMode ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    opacity: isLocalLoading ? 0.5 : 1,
-                    transition: 'opacity 0.3s ease',
-                  }}>
-                    HD
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Right section */}
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: isMobile ? 'center' : 'flex-end' }}>
-              <FaUndoAlt 
-                style={{ margin: '5px', cursor: 'pointer', color: 'white' }} 
-                onClick={resetCamera}
-                title="Reset Camera"
-              />
-              <FaExchangeAlt 
-                style={{ margin: '5px', cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
-                onClick={toggleFrameOrderInversion}
-                title="Invert Frame Order"
-              />
-              <FaRedo
-                style={{ margin: '5px', cursor: 'pointer', color: 'white' }}
-                onClick={resetToDefaults}
-                title="Reset to Defaults"
-              />
-              <div style={{ position: 'relative', margin: '5px' }}>
-                <FaList
-                  style={{ cursor: 'pointer', color: 'white' }}
-                  onClick={() => setShowPresets(!showPresets)}
-                  title="Presets"
-                />
-                {showPresets && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                    borderRadius: '5px',
-                    padding: '10px',
-                    marginTop: '5px',
-                  }}>
-                    {presets.map((preset, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          color: 'white',
-                          padding: '5px 10px',
-                          cursor: 'pointer',
-                          borderRadius: '3px',
-                          transition: 'background-color 0.2s',
-                        }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                        onClick={() => applyPreset(preset.settings)}
-                      >
-                        {preset.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
