@@ -47,6 +47,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const [targetFps, setTargetFps] = useState(60);
   const lastRenderTime = useRef(0);
   const animationFrameId = useRef(null);
+  const currentExtractionRef = useRef(null);
+  const isResolutionChange = useRef(false); // Add this line
 
   const defaultValues = useMemo(() => ({
     stackLength: 1.5,
@@ -222,9 +224,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     scaledHeight: 0,
     scaleFactor: 0
   });
-
-  // Add this ref to keep track of the current extraction process
-  const currentExtractionRef = useRef(null);
 
   // Modify the extractFrames function
   const extractFrames = useCallback((video) => {
