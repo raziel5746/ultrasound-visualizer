@@ -21,7 +21,12 @@ const HD_DIMENSIONS = {
   desktop: { width: 1920, height: 1080 }
 };
 
-const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
+const UltrasoundVisualizer = ({ 
+  videoUrl, 
+  setError, 
+  onFileSelect,
+  externalRectangle
+}) => {
   // Move maxDimensions declaration to the top
   const [isHDMode, setIsHDMode] = useState(false);
   const maxDimensions = useMemo(() => {
@@ -30,8 +35,15 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     return dimensions[isMobileDevice ? 'mobile' : 'desktop'];
   }, [isHDMode]);
 
+  // Add isResolutionChange ref here, with other refs
+  const isResolutionChange = useRef(false);
   const canvasRef = useRef(null);
   const sceneManagerRef = useRef(null);
+  const colorPaletteRef = useRef(null);
+  const lastRenderTime = useRef(0);
+  const animationFrameId = useRef(null);
+  const currentExtractionRef = useRef(null);
+
   const [isLocalLoading, setIsLocalLoading] = useState(true);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [totalFrames, setTotalFrames] = useState(0);
@@ -43,12 +55,18 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   const [globalLightIntensity, setGlobalLightIntensity] = useState(1);
   const [showPresets, setShowPresets] = useState(false);
   const [isColorPaletteExpanded, setIsColorPaletteExpanded] = useState(false);
-  const colorPaletteRef = useRef(null);
   const [targetFps, setTargetFps] = useState(60);
-  const lastRenderTime = useRef(0);
-  const animationFrameId = useRef(null);
-  const currentExtractionRef = useRef(null);
-  const isResolutionChange = useRef(false); // Add this line
+  const [frameAspectRatio, setFrameAspectRatio] = useState(1.6); // Default to 1.6
+  const [videoInfo, setVideoInfo] = useState({
+    originalWidth: 0,
+    originalHeight: 0,
+    scaledWidth: 0,
+    scaledHeight: 0,
+    scaleFactor: 0
+  });
+  const [sliceRectangle, setSliceRectangle] = useState(null);
+  const [storedVideoFile, setStoredVideoFile] = useState(null);
+  const [showExtractionScreen, setShowExtractionScreen] = useState(true);
 
   const defaultValues = useMemo(() => ({
     stackLength: 1.5,
@@ -213,18 +231,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, [globalLightIntensity]);
 
-  // Add frameAspectRatio state near other state declarations
-  const [frameAspectRatio, setFrameAspectRatio] = useState(1.6); // Default to 1.6
-
-  // Add these new states near other state declarations
-  const [videoInfo, setVideoInfo] = useState({
-    originalWidth: 0,
-    originalHeight: 0,
-    scaledWidth: 0,
-    scaledHeight: 0,
-    scaleFactor: 0
-  });
-
   // Modify the extractFrames function
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
@@ -246,32 +252,33 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         originalHeight: video.videoHeight
       }));
 
-      // Set initial rectangle with correct aspect ratio
-      const margin = 0.1;
-      const canvasWidth = 200; // Default canvas width from SliceControl
-      const canvasHeight = 200; // Default canvas height from SliceControl
-      const availableWidth = canvasWidth * (1 - 2 * margin);
-      const availableHeight = canvasHeight * (1 - 2 * margin);
+      // Only set initial rectangle if one doesn't exist or if this isn't a resolution change
+      if (!externalRectangle && !isResolutionChange.current) {
+        const margin = 0.1;
+        const canvasWidth = 200;
+        const canvasHeight = 200;
+        const availableWidth = canvasWidth * (1 - 2 * margin);
+        const availableHeight = canvasHeight * (1 - 2 * margin);
 
-      let rectWidth, rectHeight;
-      if (availableWidth / availableHeight > aspectRatio) {
-        rectHeight = availableHeight;
-        rectWidth = rectHeight * aspectRatio;
-      } else {
-        rectWidth = availableWidth;
-        rectHeight = rectWidth / aspectRatio;
+        let rectWidth, rectHeight;
+        if (availableWidth / availableHeight > aspectRatio) {
+          rectHeight = availableHeight;
+          rectWidth = rectHeight * aspectRatio;
+        } else {
+          rectWidth = availableWidth;
+          rectHeight = rectWidth / aspectRatio;
+        }
+
+        const rectX = (canvasWidth - rectWidth) / 2;
+        const rectY = (canvasHeight - rectHeight) / 2;
+
+        setSliceRectangle({
+          x: rectX,
+          y: rectY,
+          width: rectWidth,
+          height: rectHeight
+        });
       }
-
-      const rectX = (canvasWidth - rectWidth) / 2;
-      const rectY = (canvasHeight - rectHeight) / 2;
-
-      // Set the initial rectangle
-      setSliceRectangle({
-        x: rectX,
-        y: rectY,
-        width: rectWidth,
-        height: rectHeight
-      });
 
       const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
       const maxFrames = 500;
@@ -370,7 +377,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         currentExtractionRef.current = null;
       });
     });
-  }, [maxDimensions]);
+  }, [maxDimensions, externalRectangle, isResolutionChange]); // Add these dependencies
 
   // Add console.log in the video loading effect
   useEffect(() => {
@@ -701,21 +708,12 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     }
   }, []);
 
-  // Add this state near other state declarations
-  const [sliceRectangle, setSliceRectangle] = useState(null);
-
   // Add this handler
   const handleSliceRectangleChange = useCallback((newRectangle) => {
     setSliceRectangle(newRectangle);
   }, []);
 
-  // Add these new states
-  const [storedVideoFile, setStoredVideoFile] = useState(null);
-  
-  // Add a ref to track if this is a resolution change
-  const isResolutionChange = useRef(false);
-
-  // Update the handleResolutionToggle callback
+  // Add this handler near other handlers
   const handleResolutionToggle = useCallback(async () => {
     if (!storedVideoFile) return;
     
@@ -870,9 +868,6 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     
     return largerDimension > maxSdDimension;
   }, [videoInfo]);
-
-  // Add this new state near other state declarations
-  const [showExtractionScreen, setShowExtractionScreen] = useState(true);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
