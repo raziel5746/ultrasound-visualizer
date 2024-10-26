@@ -27,13 +27,16 @@ const UltrasoundVisualizer = ({
   onFileSelect,
   externalRectangle
 }) => {
-  // Move maxDimensions declaration to the top
+  // Add this ref near the other refs at the top
+  const currentHDMode = useRef(false);
+
+  // Update the isHDMode state setter to also update the ref
   const [isHDMode, setIsHDMode] = useState(false);
-  const maxDimensions = useMemo(() => {
-    const isMobileDevice = window.innerWidth <= 768;
-    const dimensions = isHDMode ? HD_DIMENSIONS : SD_DIMENSIONS;
-    return dimensions[isMobileDevice ? 'mobile' : 'desktop'];
-  }, [isHDMode]);
+  const setHDMode = useCallback((value) => {
+    const newValue = typeof value === 'function' ? value(currentHDMode.current) : value;
+    currentHDMode.current = newValue;
+    setIsHDMode(newValue);
+  }, []);
 
   // Add isResolutionChange ref here, with other refs
   const isResolutionChange = useRef(false);
@@ -231,154 +234,277 @@ const UltrasoundVisualizer = ({
     }
   }, [globalLightIntensity]);
 
-  // Modify the extractFrames function
+  // Add this ref to track the latest extraction process
+  const latestExtractionId = useRef(0);
+
+  // Modify extractFrames to use the ref
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
-      // Cancel any ongoing extraction process
-      if (currentExtractionRef.current) {
-        currentExtractionRef.current.cancel();
-      }
-
-      let isCancelled = false;
-      currentExtractionRef.current = { cancel: () => { isCancelled = true; } };
-
-      const aspectRatio = video.videoWidth / video.videoHeight;
-      setFrameAspectRatio(aspectRatio);
-
-      // Store original dimensions
-      setVideoInfo(prev => ({
-        ...prev,
-        originalWidth: video.videoWidth,
-        originalHeight: video.videoHeight
-      }));
-
-      // Only set initial rectangle if one doesn't exist or if this isn't a resolution change
-      if (!externalRectangle && !isResolutionChange.current) {
-        const margin = 0.1;
-        const canvasWidth = 200;
-        const canvasHeight = 200;
-        const availableWidth = canvasWidth * (1 - 2 * margin);
-        const availableHeight = canvasHeight * (1 - 2 * margin);
-
-        let rectWidth, rectHeight;
-        if (availableWidth / availableHeight > aspectRatio) {
-          rectHeight = availableHeight;
-          rectWidth = rectHeight * aspectRatio;
-        } else {
-          rectWidth = availableWidth;
-          rectHeight = rectWidth / aspectRatio;
+        const currentExtractionId = latestExtractionId.current;
+        
+        console.log('8. Extract frames started, HD mode:', currentHDMode.current);
+        
+        if (currentExtractionRef.current) {
+            currentExtractionRef.current.cancel();
         }
 
-        const rectX = (canvasWidth - rectWidth) / 2;
-        const rectY = (canvasHeight - rectHeight) / 2;
+        let isCancelled = false;
+        currentExtractionRef.current = { 
+            cancel: () => { 
+                console.log('Extraction cancelled');
+                isCancelled = true; 
+            } 
+        };
 
-        setSliceRectangle({
-          x: rectX,
-          y: rectY,
-          width: rectWidth,
-          height: rectHeight
-        });
-      }
+        const aspectRatio = video.videoWidth / video.videoHeight;
+        setFrameAspectRatio(aspectRatio);
 
-      const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
-      const maxFrames = 500;
-      const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
-      const frameCount = Math.min(maxFrames, totalFrameCount);
-      
-      setTotalFrames(frameCount);
+        // Store original dimensions
+        setVideoInfo(prev => ({
+          ...prev,
+          originalWidth: video.videoWidth,
+          originalHeight: video.videoHeight
+        }));
 
-      const extractFrame = (currentFrame) => {
-        return new Promise((resolveFrame) => {
-          video.currentTime = (currentFrame * frameStep) / 30;
-          video.onseeked = () => {
-            const canvas = document.createElement('canvas');
+        // Only set initial rectangle if one doesn't exist or if this isn't a resolution change
+        if (!externalRectangle && !isResolutionChange.current) {
+          const margin = 0.1;
+          const canvasWidth = 200;
+          const canvasHeight = 200;
+          const availableWidth = canvasWidth * (1 - 2 * margin);
+          const availableHeight = canvasHeight * (1 - 2 * margin);
+
+          let rectWidth, rectHeight;
+          if (availableWidth / availableHeight > aspectRatio) {
+            rectHeight = availableHeight;
+            rectWidth = rectHeight * aspectRatio;
+          } else {
+            rectWidth = availableWidth;
+            rectHeight = rectWidth / aspectRatio;
+          }
+
+          const rectX = (canvasWidth - rectWidth) / 2;
+          const rectY = (canvasHeight - rectHeight) / 2;
+
+          setSliceRectangle({
+            x: rectX,
+            y: rectY,
+            width: rectWidth,
+            height: rectHeight
+          });
+        }
+
+        const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
+        const maxFrames = 500;
+        const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
+        const frameCount = Math.min(maxFrames, totalFrameCount);
+        
+        setTotalFrames(frameCount);
+
+        const extractFrame = (currentFrame) => {
+          return new Promise((resolveFrame) => {
+            // Check if this extraction is still valid
+            if (isCancelled || currentExtractionId !== latestExtractionId.current) {
+                resolveFrame(null);
+                return;
+            }
+
+            if (currentFrame === 0) {
+              console.log('9. Processing first frame');
+            }
             
-            // Determine the larger and smaller dimensions of the video
-            const largerDimension = Math.max(video.videoWidth, video.videoHeight);
-            const smallerDimension = Math.min(video.videoWidth, video.videoHeight);
-            
-            // Determine the larger and smaller dimensions of the max allowed size
-            const maxLargerDimension = Math.max(maxDimensions.width, maxDimensions.height);
-            const maxSmallerDimension = Math.min(maxDimensions.width, maxDimensions.height);
-            
-            // Calculate scaled dimensions while maintaining aspect ratio
-            let scaledWidth = video.videoWidth;
-            let scaledHeight = video.videoHeight;
-            
-            if (largerDimension > maxLargerDimension || smallerDimension > maxSmallerDimension) {
-              if (largerDimension / maxLargerDimension > smallerDimension / maxSmallerDimension) {
-                // Larger dimension is the limiting factor
-                const scaleFactor = maxLargerDimension / largerDimension;
-                scaledWidth = Math.round(video.videoWidth * scaleFactor);
-                scaledHeight = Math.round(video.videoHeight * scaleFactor);
-              } else {
-                // Smaller dimension is the limiting factor
-                const scaleFactor = maxSmallerDimension / smallerDimension;
-                scaledWidth = Math.round(video.videoWidth * scaleFactor);
-                scaledHeight = Math.round(video.videoHeight * scaleFactor);
+            video.currentTime = (currentFrame * frameStep) / 30;
+            video.onseeked = () => {
+              const canvas = document.createElement('canvas');
+              
+              // Determine the larger and smaller dimensions of the video
+              const largerDimension = Math.max(video.videoWidth, video.videoHeight);
+              const smallerDimension = Math.min(video.videoWidth, video.videoHeight);
+              
+              // Use HD or SD dimensions based on the ref value
+              const isMobileDevice = window.innerWidth <= 768;
+              const dimensions = currentHDMode.current ? HD_DIMENSIONS : SD_DIMENSIONS;
+              const targetDimensions = dimensions[isMobileDevice ? 'mobile' : 'desktop'];
+              const maxLargerDimension = Math.max(targetDimensions.width, targetDimensions.height);
+              const maxSmallerDimension = Math.min(targetDimensions.width, targetDimensions.height);
+              
+              // Calculate scaled dimensions while maintaining aspect ratio
+              let scaledWidth = video.videoWidth;
+              let scaledHeight = video.videoHeight;
+              
+              // Always apply scaling if dimensions exceed target dimensions
+              if (largerDimension > maxLargerDimension || smallerDimension > maxSmallerDimension) {
+                if (largerDimension / maxLargerDimension > smallerDimension / maxSmallerDimension) {
+                  // Larger dimension is the limiting factor
+                  const scaleFactor = maxLargerDimension / largerDimension;
+                  scaledWidth = Math.round(video.videoWidth * scaleFactor);
+                  scaledHeight = Math.round(video.videoHeight * scaleFactor);
+                } else {
+                  // Smaller dimension is the limiting factor
+                  const scaleFactor = maxSmallerDimension / smallerDimension;
+                  scaledWidth = Math.round(video.videoWidth * scaleFactor);
+                  scaledHeight = Math.round(video.videoHeight * scaleFactor);
+                }
               }
-            }
 
-            // Update video info with scaled dimensions and scale factor
-            if (currentFrame === 0) { // Only update on first frame
-              const scaleFactor = (scaledWidth / video.videoWidth).toFixed(2);
-              setVideoInfo(prev => ({
-                ...prev,
-                scaledWidth,
-                scaledHeight,
-                scaleFactor
-              }));
-            }
-            
-            // Set canvas dimensions to the scaled size
-            canvas.width = scaledWidth;
-            canvas.height = scaledHeight;
-            
-            const ctx = canvas.getContext('2d');
-            // Enable image smoothing for better quality when scaling down
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            
-            // Draw the video frame with scaling
-            ctx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
-            resolveFrame(canvas);
-          };
-        });
-      };
+              // Update video info with scaled dimensions and scale factor
+              if (currentFrame === 0) {
+                const scaleFactor = (scaledWidth / video.videoWidth).toFixed(2);
+                console.log('10. First frame dimensions:', {
+                  original: `${video.videoWidth}×${video.videoHeight}`,
+                  scaled: `${scaledWidth}×${scaledHeight}`,
+                  scaleFactor,
+                  isHD: currentHDMode.current
+                });
+                setVideoInfo(prev => ({
+                  ...prev,
+                  originalWidth: video.videoWidth,
+                  originalHeight: video.videoHeight,
+                  scaledWidth,
+                  scaledHeight,
+                  scaleFactor
+                }));
+              }
+              
+              // Set canvas dimensions to the scaled size
+              canvas.width = scaledWidth;
+              canvas.height = scaledHeight;
+              
+              const ctx = canvas.getContext('2d');
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              
+              ctx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
+              resolveFrame(canvas);
+            };
+          });
+        };
 
-      const extractAllFrames = async () => {
-        const frameCanvases = [];
-        for (let i = 0; i < frameCount; i++) {
+        const extractAllFrames = async () => {
+          const frameCanvases = [];
+          for (let i = 0; i < frameCount; i++) {
+            if (isCancelled) {
+              reject(new Error('Frame extraction cancelled'));
+              return;
+            }
+            const frameCanvas = await extractFrame(i);
+            frameCanvases.push(frameCanvas);
+            setExtractionProgress((i + 1) / frameCount);
+          }
+
           if (isCancelled) {
             reject(new Error('Frame extraction cancelled'));
             return;
           }
-          const frameCanvas = await extractFrame(i);
-          frameCanvases.push(frameCanvas);
-          setExtractionProgress((i + 1) / frameCount);
-        }
 
-        if (isCancelled) {
-          reject(new Error('Frame extraction cancelled'));
-          return;
-        }
+          try {
+            const atlas = new TextureAtlas(sceneManagerRef.current.getScene());
+            await atlas.createAtlas(frameCanvases);
+            console.log('11. Texture atlas created');
+            setTextureAtlas(atlas);
+            resolve(frameCanvases.length);
+          } catch (error) {
+            console.error('12. Error creating texture atlas:', error);
+            reject(error);
+          }
+        };
 
-        try {
-          const atlas = new TextureAtlas(sceneManagerRef.current.getScene());
-          await atlas.createAtlas(frameCanvases);
-          setTextureAtlas(atlas);
-          resolve(frameCanvases.length);
-        } catch (error) {
-          reject(error);
-        }
-      };
-
-      extractAllFrames().catch(reject).finally(() => {
-        currentExtractionRef.current = null;
-      });
+        extractAllFrames().catch(reject).finally(() => {
+          currentExtractionRef.current = null;
+          console.log('13. Extract frames process completed');
+        });
     });
-  }, [maxDimensions, externalRectangle, isResolutionChange]); // Add these dependencies
+  }, [externalRectangle, isResolutionChange]); // Remove isHDMode from dependencies
 
+  // Then keep handleResolutionToggle after it
+  const handleResolutionToggle = useCallback(async () => {
+    if (!storedVideoFile) return;
+    
+    console.log('1. Resolution toggle started');
+    isResolutionChange.current = true;
+    
+    // Cancel any ongoing extraction
+    if (currentExtractionRef.current) {
+        currentExtractionRef.current.cancel();
+    }
+
+    // Increment extraction ID
+    latestExtractionId.current++;
+    const currentExtractionId = latestExtractionId.current;
+    
+    // Toggle HD mode immediately and wait for the state to update
+    await new Promise(resolve => {
+        setHDMode(prev => {
+            console.log(`2. HD mode toggled to: ${!prev}`);
+            return !prev;
+        });
+        // Use setTimeout to ensure the state has updated
+        setTimeout(resolve, 0);
+    });
+    
+    // Reset states but don't show extraction screen
+    requestAnimationFrame(() => {
+        console.log('3. Resetting states');
+        setTextureAtlas(null);
+        setIsLocalLoading(true);
+        setError(null);
+        setExtractionProgress(0);
+        setTotalFrames(0);
+        setRenderedFrames(0);
+        setShowExtractionScreen(false); // Add this line to ensure extraction screen stays hidden
+    });
+
+    // Create video element and set up promise for metadata loading
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    
+    try {
+        // Wait for metadata to load before proceeding
+        await new Promise((resolve, reject) => {
+            video.addEventListener('loadedmetadata', resolve, { once: true });
+            video.addEventListener('error', reject, { once: true });
+            video.src = URL.createObjectURL(storedVideoFile);
+            video.load();
+        });
+
+        // Check if this is still the latest extraction
+        if (currentExtractionId !== latestExtractionId.current) {
+            console.log('Extraction cancelled - newer extraction started');
+            return;
+        }
+
+        console.log('4. Starting frame extraction');
+        await video.play();
+        video.pause();
+        const frameCount = await extractFrames(video);
+
+        // Check again if this is still the latest extraction
+        if (currentExtractionId !== latestExtractionId.current) {
+            console.log('Extraction cancelled - newer extraction started');
+            return;
+        }
+
+        console.log('5. Frame extraction completed');
+        setTotalFrames(frameCount);
+        setIsLocalLoading(false);
+    } catch (error) {
+        if (error.message !== 'Frame extraction cancelled') {
+            console.error('6. Error during extraction:', error.message);
+            setError(`Error extracting frames: ${error.message}`);
+            setIsLocalLoading(false);
+        }
+    } finally {
+        URL.revokeObjectURL(video.src);
+        if (currentExtractionId === latestExtractionId.current) {
+            isResolutionChange.current = false;
+            console.log('7. Resolution change process completed');
+        }
+        video.remove(); // Clean up the video element
+    }
+  }, [storedVideoFile, extractFrames, setError, setHDMode]);
+
+  // Then the video loading effect
   useEffect(() => {
     if (!videoUrl) {
       setError('No video URL provided');
@@ -404,61 +530,63 @@ const UltrasoundVisualizer = ({
         .catch(error => setError(`Error storing video file: ${error.message}`));
     }
 
-    // Reset states for new video
-    setTextureAtlas(null);
-    setIsLocalLoading(true);
-    // Only show extraction screen for new videos, not resolution changes
-    setShowExtractionScreen(!isResolutionChange.current);
-    setError(null);
-    setExtractionProgress(0);
-    setTotalFrames(0);
-    setRenderedFrames(0);
+    // Only proceed with extraction if it's not a resolution change
+    if (!isResolutionChange.current) {
+      // Reset states for new video
+      setTextureAtlas(null);
+      setIsLocalLoading(true);
+      setShowExtractionScreen(true);
+      setError(null);
+      setExtractionProgress(0);
+      setTotalFrames(0);
+      setRenderedFrames(0);
 
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.muted = true;
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
 
-    const handleVideoLoad = async () => {
-      try {
-        await video.play();
-        video.pause();
-        const frameCount = await extractFrames(video);
-        setTotalFrames(frameCount);
-        setIsLocalLoading(false);
-      } catch (error) {
-        if (error.message !== 'Frame extraction cancelled') {
-          setError(`Error extracting frames: ${error.message}`);
+      const handleVideoLoad = async () => {
+        try {
+          await video.play();
+          video.pause();
+          const frameCount = await extractFrames(video);
+          setTotalFrames(frameCount);
           setIsLocalLoading(false);
+        } catch (error) {
+          if (error.message !== 'Frame extraction cancelled') {
+            setError(`Error extracting frames: ${error.message}`);
+            setIsLocalLoading(false);
+          }
         }
-      }
-    };
+      };
 
-    const handleVideoError = (e) => {
-      setError(`Error loading video: ${e.message}`);
-      setIsLocalLoading(false);
-    };
+      const handleVideoError = (e) => {
+        setError(`Error loading video: ${e.message}`);
+        setIsLocalLoading(false);
+      };
 
-    video.addEventListener('loadedmetadata', handleVideoLoad);
-    video.addEventListener('error', handleVideoError);
+      video.addEventListener('loadedmetadata', handleVideoLoad);
+      video.addEventListener('error', handleVideoError);
 
-    if (videoUrl instanceof Blob) {
-      video.src = URL.createObjectURL(videoUrl);
-    } else {
-      video.src = videoUrl;
-    }
-
-    video.load();
-
-    return () => {
-      video.removeEventListener('loadedmetadata', handleVideoLoad);
-      video.removeEventListener('error', handleVideoError);
-      video.pause();
-      video.src = '';
       if (videoUrl instanceof Blob) {
-        URL.revokeObjectURL(video.src);
+        video.src = URL.createObjectURL(videoUrl);
+      } else {
+        video.src = videoUrl;
       }
-    };
-  }, [videoUrl, setError, extractFrames]); // Remove isHDMode from dependencies
+
+      video.load();
+
+      return () => {
+        video.removeEventListener('loadedmetadata', handleVideoLoad);
+        video.removeEventListener('error', handleVideoError);
+        video.pause();
+        video.src = '';
+        if (videoUrl instanceof Blob) {
+          URL.revokeObjectURL(video.src);
+        }
+      };
+    }
+  }, [videoUrl, setError, extractFrames, isResolutionChange]);
 
   const resetToDefaults = useCallback(() => {
     setStackLength(defaultValues.stackLength);
@@ -705,142 +833,6 @@ const UltrasoundVisualizer = ({
   const handleSliceRectangleChange = useCallback((newRectangle) => {
     setSliceRectangle(newRectangle);
   }, []);
-
-  // Add this handler near other handlers
-  const handleResolutionToggle = useCallback(async () => {
-    if (!storedVideoFile) return;
-    
-    // Set the flag BEFORE any state changes
-    isResolutionChange.current = true;
-    
-    // Wrap all state changes in a single requestAnimationFrame to ensure they batch together
-    requestAnimationFrame(() => {
-      setIsHDMode(prev => !prev);
-      setTextureAtlas(null);
-      setIsLocalLoading(true);
-      setError(null);
-      setExtractionProgress(0);
-      setTotalFrames(0);
-      setRenderedFrames(0);
-    });
-
-    // Cancel any ongoing extraction process
-    if (currentExtractionRef.current) {
-      currentExtractionRef.current.cancel();
-    }
-
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.muted = true;
-    video.src = URL.createObjectURL(storedVideoFile);
-
-    try {
-      await video.play();
-      video.pause();
-      const frameCount = await extractFrames(video);
-      setTotalFrames(frameCount);
-      setIsLocalLoading(false);
-    } catch (error) {
-      if (error.message !== 'Frame extraction cancelled') {
-        setError(`Error extracting frames: ${error.message}`);
-        setIsLocalLoading(false);
-      }
-    } finally {
-      URL.revokeObjectURL(video.src);
-      isResolutionChange.current = false; // Reset the flag
-    }
-  }, [storedVideoFile, extractFrames, setError]);
-
-  // Modify the video loading effect
-  useEffect(() => {
-    if (!videoUrl) {
-      setError('No video URL provided');
-      setIsLocalLoading(false);
-      return;
-    }
-
-    // Check for WebGL support
-    if (!window.WebGLRenderingContext) {
-      setError('WebGL is not supported on this device.');
-      setIsLocalLoading(false);
-      return;
-    }
-
-    // Store the video file
-    if (videoUrl instanceof Blob) {
-      setStoredVideoFile(videoUrl);
-    } else {
-      // If it's a URL, fetch the file first
-      fetch(videoUrl)
-        .then(response => response.blob())
-        .then(blob => setStoredVideoFile(blob))
-        .catch(error => setError(`Error storing video file: ${error.message}`));
-    }
-
-    // Reset states for new video
-    setTextureAtlas(null);
-    setIsLocalLoading(true);
-    // Only show extraction screen for new videos, not resolution changes
-    setShowExtractionScreen(!isResolutionChange.current);
-    setError(null);
-    setExtractionProgress(0);
-    setTotalFrames(0);
-    setRenderedFrames(0);
-
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.muted = true;
-
-    const handleVideoLoad = async () => {
-      try {
-        await video.play();
-        video.pause();
-        const frameCount = await extractFrames(video);
-        setTotalFrames(frameCount);
-        setIsLocalLoading(false);
-      } catch (error) {
-        if (error.message !== 'Frame extraction cancelled') {
-          setError(`Error extracting frames: ${error.message}`);
-          setIsLocalLoading(false);
-        }
-      }
-    };
-
-    const handleVideoError = (e) => {
-      setError(`Error loading video: ${e.message}`);
-      setIsLocalLoading(false);
-    };
-
-    video.addEventListener('loadedmetadata', handleVideoLoad);
-    video.addEventListener('error', handleVideoError);
-
-    if (videoUrl instanceof Blob) {
-      video.src = URL.createObjectURL(videoUrl);
-    } else {
-      video.src = videoUrl;
-    }
-
-    video.load();
-
-    return () => {
-      video.removeEventListener('loadedmetadata', handleVideoLoad);
-      video.removeEventListener('error', handleVideoError);
-      video.pause();
-      video.src = '';
-      if (videoUrl instanceof Blob) {
-        URL.revokeObjectURL(video.src);
-      }
-    };
-  }, [videoUrl, setError, extractFrames]); // Remove isHDMode from dependencies
-
-  // Add cleanup for stored video on unmount
-  useEffect(() => {
-    return () => {
-      if (storedVideoFile) {
-        URL.revokeObjectURL(URL.createObjectURL(storedVideoFile));
-      }
-    };
-  }, [storedVideoFile]);
 
   // Add this function near the top of the component to determine if HD is available
   const isHDAvailable = useMemo(() => {
