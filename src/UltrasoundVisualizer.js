@@ -373,6 +373,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     });
   }, [maxDimensions]);
 
+  // Add console.log in the video loading effect
   useEffect(() => {
     if (!videoUrl) {
       setError('No video URL provided');
@@ -387,12 +388,32 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
       return;
     }
 
+    // Store the video file
+    if (videoUrl instanceof Blob) {
+      setStoredVideoFile(videoUrl);
+    } else {
+      // If it's a URL, fetch the file first
+      fetch(videoUrl)
+        .then(response => response.blob())
+        .then(blob => setStoredVideoFile(blob))
+        .catch(error => setError(`Error storing video file: ${error.message}`));
+    }
+
+    // Reset states for new video
     setTextureAtlas(null);
     setIsLocalLoading(true);
+    // Only show extraction screen for new videos, not resolution changes
+    setShowExtractionScreen(!isResolutionChange.current);
     setError(null);
     setExtractionProgress(0);
     setTotalFrames(0);
     setRenderedFrames(0);
+
+    console.log('Video loading effect - Setting states:', {
+      isLocalLoading: true,
+      showExtractionScreen: !isResolutionChange.current,
+      isResolutionChange: isResolutionChange.current
+    });
 
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -438,7 +459,7 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         URL.revokeObjectURL(video.src);
       }
     };
-  }, [videoUrl, setError, extractFrames]);
+  }, [videoUrl, setError, extractFrames]); // Remove isHDMode from dependencies
 
   const resetToDefaults = useCallback(() => {
     setStackLength(defaultValues.stackLength);
@@ -692,17 +713,26 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
   // Add these new states
   const [storedVideoFile, setStoredVideoFile] = useState(null);
   
-  // Update the handleResolutionToggle useCallback
+  // Add a ref to track if this is a resolution change
+  const isResolutionChange = useRef(false);
+
+  // Update the handleResolutionToggle callback
   const handleResolutionToggle = useCallback(async () => {
     if (!storedVideoFile) return;
     
-    setIsHDMode(prev => !prev);
-    setTextureAtlas(null);
-    setIsLocalLoading(true);
-    setError(null);
-    setExtractionProgress(0);
-    setTotalFrames(0);
-    setRenderedFrames(0);
+    // Set the flag BEFORE any state changes
+    isResolutionChange.current = true;
+    
+    // Wrap all state changes in a single requestAnimationFrame to ensure they batch together
+    requestAnimationFrame(() => {
+      setIsHDMode(prev => !prev);
+      setTextureAtlas(null);
+      setIsLocalLoading(true);
+      setError(null);
+      setExtractionProgress(0);
+      setTotalFrames(0);
+      setRenderedFrames(0);
+    });
 
     // Cancel any ongoing extraction process
     if (currentExtractionRef.current) {
@@ -727,10 +757,11 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
       }
     } finally {
       URL.revokeObjectURL(video.src);
+      isResolutionChange.current = false; // Reset the flag
     }
   }, [storedVideoFile, extractFrames, setError]);
 
-  // Update the video loading effect
+  // Modify the video loading effect
   useEffect(() => {
     if (!videoUrl) {
       setError('No video URL provided');
@@ -738,12 +769,14 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
       return;
     }
 
-    // Clean up previous stored video if exists
-    if (storedVideoFile) {
-      URL.revokeObjectURL(URL.createObjectURL(storedVideoFile));
+    // Check for WebGL support
+    if (!window.WebGLRenderingContext) {
+      setError('WebGL is not supported on this device.');
+      setIsLocalLoading(false);
+      return;
     }
 
-    // Store the new video file
+    // Store the video file
     if (videoUrl instanceof Blob) {
       setStoredVideoFile(videoUrl);
     } else {
@@ -754,8 +787,67 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         .catch(error => setError(`Error storing video file: ${error.message}`));
     }
 
-    // Rest of the existing video loading code...
-  }, [videoUrl, setError, extractFrames, storedVideoFile]); // Add storedVideoFile to the dependency array
+    // Reset states for new video
+    setTextureAtlas(null);
+    setIsLocalLoading(true);
+    // Only show extraction screen for new videos, not resolution changes
+    setShowExtractionScreen(!isResolutionChange.current);
+    setError(null);
+    setExtractionProgress(0);
+    setTotalFrames(0);
+    setRenderedFrames(0);
+
+    console.log('Video loading effect - Setting states:', {
+      isLocalLoading: true,
+      showExtractionScreen: !isResolutionChange.current,
+      isResolutionChange: isResolutionChange.current
+    });
+
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+
+    const handleVideoLoad = async () => {
+      try {
+        await video.play();
+        video.pause();
+        const frameCount = await extractFrames(video);
+        setTotalFrames(frameCount);
+        setIsLocalLoading(false);
+      } catch (error) {
+        if (error.message !== 'Frame extraction cancelled') {
+          setError(`Error extracting frames: ${error.message}`);
+          setIsLocalLoading(false);
+        }
+      }
+    };
+
+    const handleVideoError = (e) => {
+      setError(`Error loading video: ${e.message}`);
+      setIsLocalLoading(false);
+    };
+
+    video.addEventListener('loadedmetadata', handleVideoLoad);
+    video.addEventListener('error', handleVideoError);
+
+    if (videoUrl instanceof Blob) {
+      video.src = URL.createObjectURL(videoUrl);
+    } else {
+      video.src = videoUrl;
+    }
+
+    video.load();
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleVideoLoad);
+      video.removeEventListener('error', handleVideoError);
+      video.pause();
+      video.src = '';
+      if (videoUrl instanceof Blob) {
+        URL.revokeObjectURL(video.src);
+      }
+    };
+  }, [videoUrl, setError, extractFrames]); // Remove isHDMode from dependencies
 
   // Add cleanup for stored video on unmount
   useEffect(() => {
@@ -779,6 +871,9 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
     
     return largerDimension > maxSdDimension;
   }, [videoInfo]);
+
+  // Add this new state near other state declarations
+  const [showExtractionScreen, setShowExtractionScreen] = useState(true);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
@@ -1048,7 +1143,8 @@ const UltrasoundVisualizer = ({ videoUrl, setError, onFileSelect }) => {
         </div>
 
         {/* Loading screen remains the same */}
-        {isLocalLoading && (
+        {isLocalLoading && showExtractionScreen && (
+          console.log('Render - States:', { isLocalLoading, showExtractionScreen }),
           <div style={{
             position: 'absolute',
             top: 0,
