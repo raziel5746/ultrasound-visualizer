@@ -69,7 +69,7 @@ const UltrasoundVisualizer = ({
   });
   const [sliceRectangle, setSliceRectangle] = useState(null);
   const [storedVideoFile, setStoredVideoFile] = useState(null);
-  const [showExtractionScreen, setShowExtractionScreen] = useState(true);
+  const [showExtractionScreen, setShowExtractionScreen]=useState(true);
 
   // Update the defaultValues object to include all filter values
   const defaultValues = useMemo(() => ({
@@ -107,6 +107,13 @@ const UltrasoundVisualizer = ({
   // Add color map state and parameters
   const [colorMap, setColorMap] = useState('DEFAULT');
   const [colorMapParams, setColorMapParams] = useState({});
+
+  const [textureFilters, setTextureFilters] = useState({
+    brightness: defaultValues.textureFilters.brightness,
+    contrast: defaultValues.textureFilters.contrast,
+    isInverted: defaultValues.textureFilters.isInverted,
+    isGrayscale: defaultValues.textureFilters.isGrayscale
+  });
 
   // Initialize color map parameters when color map changes
   useEffect(() => {
@@ -230,7 +237,16 @@ const UltrasoundVisualizer = ({
   // Add this ref to track the latest extraction process
   const latestExtractionId = useRef(0);
 
-  // Modify extractFrames to use the ref
+  // Update the extractFrames function to use a ref for textureFilters
+  // Add this ref near the other refs at the top
+  const currentTextureFilters = useRef(textureFilters);
+
+  // Update the textureFilters state setter to also update the ref
+  useEffect(() => {
+    currentTextureFilters.current = textureFilters;
+  }, [textureFilters]);
+
+  // Update the extractFrames function to use the ref
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
         const currentExtractionId = latestExtractionId.current;
@@ -380,6 +396,10 @@ const UltrasoundVisualizer = ({
           try {
             const atlas = new TextureAtlas(sceneManagerRef.current.getScene());
             await atlas.createAtlas(frameCanvases);
+            
+            // Use the ref instead of the state
+            atlas.applyFilters(currentTextureFilters.current);
+            
             setTextureAtlas(atlas);
             resolve(frameCanvases.length);
           } catch (error) {
@@ -392,7 +412,7 @@ const UltrasoundVisualizer = ({
           currentExtractionRef.current = null;
         });
     });
-  }, [externalRectangle, isResolutionChange]); // Remove isHDMode from dependencies
+  }, [externalRectangle, isResolutionChange]); // Dependencies remain the same
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -560,6 +580,8 @@ const UltrasoundVisualizer = ({
   // Add this before resetToDefaults
   const handleTextureFilterChange = useCallback((filters) => {
     if (textureAtlas) {
+      // Don't trigger loading screen for filter changes
+      setTextureFilters(filters);
       textureAtlas.applyFilters(filters);
     }
   }, [textureAtlas]);
@@ -829,14 +851,6 @@ const UltrasoundVisualizer = ({
       return newMode;
     });
   }, []);
-
-  // Update the initial state to remove alphaFromBrightness
-  const [textureFilters, setTextureFilters] = useState({
-    brightness: 1,
-    contrast: 0,
-    isInverted: false,
-    isGrayscale: false
-  });
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
