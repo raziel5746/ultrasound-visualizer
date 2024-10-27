@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as BABYLON from '@babylonjs/core';
 import SceneManager from './scene/SceneManager';
 import ControlPanel from './components/ControlPanel';
-import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaList, FaCog } from 'react-icons/fa';
+import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaList, FaCog, FaCube } from 'react-icons/fa';
 import TextureAtlas from './utils/TextureAtlas';
 import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
@@ -807,6 +807,20 @@ const UltrasoundVisualizer = ({
     return largerDimension > maxSdDimension;
   }, [videoInfo]);
 
+  // Add new state for camera mode
+  const [isOrthographic, setIsOrthographic] = useState(false);
+
+  // Add toggle function
+  const toggleCameraMode = useCallback(() => {
+    setIsOrthographic(prev => {
+      const newMode = !prev;
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.setCameraMode(newMode ? 'orthographic' : 'perspective');
+      }
+      return newMode;
+    });
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -1011,13 +1025,23 @@ const UltrasoundVisualizer = ({
               </div>
             </div>
 
-            {/* Desktop layout - Color palette on the right */}
+            {/* Desktop layout - Color palette and camera mode on the right */}
             {!isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center' }}> {/* Removed marginBottom */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}> {/* Added gap */}
                 <ColorPalette
                   colors={backgroundColors}
                   selectedColor={backgroundColor}
                   onColorSelect={setBackgroundColor}
+                />
+                <FaCube
+                  style={{ 
+                    cursor: 'pointer', 
+                    color: isOrthographic ? '#3498db' : 'white',
+                    transition: 'color 0.2s ease',
+                    fontSize: '24px'  // Added this line to make it bigger
+                  }}
+                  onClick={toggleCameraMode}
+                  title={`Switch to ${isOrthographic ? 'Perspective' : 'Orthographic'} View`}
                 />
               </div>
             )}
@@ -1086,47 +1110,59 @@ const UltrasoundVisualizer = ({
                   </div>
                 </div>
 
-                {/* Right side - Color palette */}
-                <div style={{ position: 'relative' }}>
-                  <div
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '50%',
-                      backgroundColor: backgroundColor,
-                      cursor: 'pointer',
-                      border: '2px solid white',
-                      transition: 'transform 0.3s ease-in-out',
-                      transform: isColorPaletteExpanded ? 'scale(1.1)' : 'scale(1)',
-                    }}
-                    onClick={toggleColorPalette}
-                  />
-                  <div
-                    ref={colorPaletteRef}
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: '0', // Changed from left: '0' to right: '0'
-                      marginTop: '5px',
-                      backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                      borderRadius: '5px',
-                      padding: '5px',
-                      maxHeight: '0',
-                      opacity: '0',
-                      overflow: 'hidden',
-                      transition: 'max-height 0.2s ease-in-out, opacity 0.2s ease-in-out',
-                      zIndex: 1,
-                    }}
-                  >
-                    <ColorPalette
-                      colors={backgroundColors}
-                      selectedColor={backgroundColor}
-                      onColorSelect={(color) => {
-                        setBackgroundColor(color);
-                        setIsColorPaletteExpanded(false);
+                {/* Right side - Color palette and camera mode */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: backgroundColor,
+                        cursor: 'pointer',
+                        border: '2px solid white',
+                        transition: 'transform 0.3s ease-in-out',
+                        transform: isColorPaletteExpanded ? 'scale(1.1)' : 'scale(1)',
                       }}
+                      onClick={toggleColorPalette}
                     />
+                    <div
+                      ref={colorPaletteRef}
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: '0', // Changed from left: '0' to right: '0'
+                        marginTop: '5px',
+                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                        borderRadius: '5px',
+                        padding: '5px',
+                        maxHeight: '0',
+                        opacity: '0',
+                        overflow: 'hidden',
+                        transition: 'max-height 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                        zIndex: 1,
+                      }}
+                    >
+                      <ColorPalette
+                        colors={backgroundColors}
+                        selectedColor={backgroundColor}
+                        onColorSelect={(color) => {
+                          setBackgroundColor(color);
+                          setIsColorPaletteExpanded(false);
+                        }}
+                      />
+                    </div>
                   </div>
+                  <FaCube
+                    style={{ 
+                      cursor: 'pointer', 
+                      color: isOrthographic ? '#3498db' : 'white',
+                      transition: 'color 0.2s ease',
+                      fontSize: '24px'  // Added this line to make it bigger
+                    }}
+                    onClick={toggleCameraMode}
+                    title={`Switch to ${isOrthographic ? 'Perspective' : 'Orthographic'} View`}
+                  />
                 </div>
               </div>
             )}
@@ -1262,6 +1298,7 @@ const UltrasoundVisualizer = ({
           height: isMobile ? (isControlPanelOpen ? '340px' : '0') : '100%',
         }}
         frameAspectRatio={frameAspectRatio}
+        isOrthographic={isOrthographic}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
