@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as BABYLON from '@babylonjs/core';
 import SceneManager from './scene/SceneManager';
 import ControlPanel from './components/ControlPanel';
-import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaList, FaCog, FaCube } from 'react-icons/fa';
+import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaCog, FaCube, FaYinYang, FaRecordVinyl } from 'react-icons/fa';
 import TextureAtlas from './utils/TextureAtlas';
 import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
@@ -57,7 +57,6 @@ const UltrasoundVisualizer = ({
   const [sliceRange, setSliceRange] = useState([0, 100]);
   const [textureAtlas, setTextureAtlas] = useState(null);
   const [globalLightIntensity, setGlobalLightIntensity] = useState(2.5);  // Changed from 1 to 2.5
-  const [showPresets, setShowPresets] = useState(false);
   const [isColorPaletteExpanded, setIsColorPaletteExpanded] = useState(false);
   const [targetFps, setTargetFps] = useState(60);
   const [frameAspectRatio, setFrameAspectRatio] = useState(1.6); // Default to 1.6
@@ -755,21 +754,6 @@ const UltrasoundVisualizer = ({
     }
   }, [onFileSelect, setError]);
 
-  const presets = [
-    { name: 'Default', settings: { brightness: 0.5, contrast: 0.5, opacity: 0.5, blendMode: BABYLON.Constants.ALPHA_COMBINE } },
-    { name: 'High Contrast', settings: { brightness: 0.6, contrast: 0.8, opacity: 0.7, blendMode: BABYLON.Constants.ALPHA_COMBINE } },
-    { name: 'Soft Tissue', settings: { brightness: 0.4, contrast: 0.3, opacity: 0.6, blendMode: BABYLON.Constants.ALPHA_ADD } },
-    { name: 'Bone', settings: { brightness: 0.7, contrast: 0.9, opacity: 0.8, blendMode: BABYLON.Constants.ALPHA_MAXIMIZED } },
-  ];
-
-  const applyPreset = useCallback((settings) => {
-    setBrightness(settings.brightness || brightness);
-    setOpacity(settings.opacity || opacity);
-    setBlendMode(settings.blendMode || blendMode);
-    setShowPresets(false);
-    throttledUpdateFrameStack();
-  }, [brightness, opacity, blendMode, throttledUpdateFrameStack]);
-
   // Add these state declarations near the other useState declarations
   const [exposure, setExposure] = useState(1);
   const [contrast, setContrast] = useState(1);
@@ -989,10 +973,39 @@ const UltrasoundVisualizer = ({
                   onClick={resetToDefaults}
                   title="Reset to Defaults"
                 />
-                <FaList
-                  style={{ cursor: 'pointer', color: 'white' }}
-                  onClick={() => setShowPresets(!showPresets)}
-                  title="Presets"
+                {/* Add B&W toggle */}
+                <FaRecordVinyl
+                  style={{ 
+                    cursor: 'pointer', 
+                    color: textureFilters.isGrayscale ? '#3498db' : 'white',
+                    transition: 'color 0.2s ease'
+                  }}
+                  onClick={() => {
+                    const newFilters = { 
+                      ...textureFilters, 
+                      isGrayscale: !textureFilters.isGrayscale 
+                    };
+                    setTextureFilters(newFilters);
+                    handleTextureFilterChange(newFilters);
+                  }}
+                  title="Toggle B&W"
+                />
+                {/* Add Invert Colors toggle */}
+                <FaYinYang
+                  style={{ 
+                    cursor: 'pointer', 
+                    color: textureFilters.isInverted ? '#3498db' : 'white',
+                    transition: 'color 0.2s ease'
+                  }}
+                  onClick={() => {
+                    const newFilters = { 
+                      ...textureFilters, 
+                      isInverted: !textureFilters.isInverted 
+                    };
+                    setTextureFilters(newFilters);
+                    handleTextureFilterChange(newFilters);
+                  }}
+                  title="Invert Colors"
                 />
               </div>
             )}
@@ -1086,44 +1099,40 @@ const UltrasoundVisualizer = ({
                     onClick={resetToDefaults}
                     title="Reset to Defaults"
                   />
-                  <div style={{ position: 'relative' }}>
-                    <FaList
-                      style={{ cursor: 'pointer', color: 'white' }}
-                      onClick={() => setShowPresets(!showPresets)}
-                      title="Presets"
-                    />
-                    {showPresets && (
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        right: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                        borderRadius: '5px',
-                        padding: '10px',
-                        marginBottom: '5px',
-                        zIndex: 1,
-                      }}>
-                        {presets.map((preset, index) => (
-                          <div
-                            key={index}
-                            style={{
-                              color: 'white',
-                              padding: '5px 10px',
-                              cursor: 'pointer',
-                              borderRadius: '3px',
-                              transition: 'background-color 0.2s',
-                              whiteSpace: 'nowrap',
-                            }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                            onClick={() => applyPreset(preset.settings)}
-                          >
-                            {preset.name}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Add B&W toggle */}
+                  <FaRecordVinyl
+                    style={{ 
+                      cursor: 'pointer', 
+                      color: textureFilters.isGrayscale ? '#3498db' : 'white',
+                      transition: 'color 0.2s ease'
+                    }}
+                    onClick={() => {
+                      const newFilters = { 
+                        ...textureFilters, 
+                        isGrayscale: !textureFilters.isGrayscale 
+                      };
+                      setTextureFilters(newFilters);
+                      handleTextureFilterChange(newFilters);
+                    }}
+                    title="Toggle B&W"
+                  />
+                  {/* Add Invert Colors toggle */}
+                  <FaYinYang
+                    style={{ 
+                      cursor: 'pointer', 
+                      color: textureFilters.isInverted ? '#3498db' : 'white',
+                      transition: 'color 0.2s ease'
+                    }}
+                    onClick={() => {
+                      const newFilters = { 
+                        ...textureFilters, 
+                        isInverted: !textureFilters.isInverted 
+                      };
+                      setTextureFilters(newFilters);
+                      handleTextureFilterChange(newFilters);
+                    }}
+                    title="Invert Colors"
+                  />
                 </div>
 
                 {/* Right side - Color palette and camera mode */}

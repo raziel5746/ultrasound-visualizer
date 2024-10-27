@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaExchangeAlt, FaImage } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
@@ -572,64 +572,9 @@ const ControlPanel = ({
         </>
       )}
       <ControlGroup isMobile={isMobile} style={{ marginTop: isMobile ? 0 : '24px' }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: '15px' 
-        }}>
-          <h4 style={{ margin: 0 }}>Texture Filters</h4>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => {
-                const newFilters = { 
-                  ...textureFilters, 
-                  isGrayscale: !textureFilters.isGrayscale 
-                };
-                setTextureFilters(newFilters);
-                onTextureFilterChange(newFilters);
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '8px',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                color: textureFilters.isGrayscale ? '#3498db' : '#ffffff',
-                transition: 'all 0.2s ease',
-              }}
-              title="Toggle B&W"
-            >
-              <FaImage size={20} />
-            </button>
-            <button
-              onClick={() => {
-                const newFilters = { 
-                  ...textureFilters, 
-                  isInverted: !textureFilters.isInverted 
-                };
-                setTextureFilters(newFilters);
-                onTextureFilterChange(newFilters);
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '8px',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                color: textureFilters.isInverted ? '#3498db' : '#ffffff',
-                transition: 'all 0.2s ease',
-              }}
-              title="Invert Colors"
-            >
-              <FaExchangeAlt size={20} />
-            </button>
-          </div>
-        </div>
-
         <ControlItem
           icon={<FaSun />}
-          label="Brightness"
+          label="Texture Brightness"
           value={textureFilters.brightness}
           min={0.1}
           max={3}
@@ -644,7 +589,7 @@ const ControlPanel = ({
 
         <ControlItem
           icon={<FaAdjust />}
-          label="Contrast"
+          label="Texture Contrast"
           value={textureFilters.contrast}
           min={0}
           max={3}

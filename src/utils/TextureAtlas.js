@@ -187,43 +187,33 @@ class TextureAtlas {
     const width = this.originalAtlas.getSize().width;
     const height = this.originalAtlas.getSize().height;
 
-    // Clear any previous filters
-    ctx.filter = 'none';
-    
     // Clear the canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Build the filter string
-    let filterString = '';
+    // Combine all filters into a single filter string
+    const filterParts = [];
     
-    // Add brightness filter
     if (filters.brightness !== undefined) {
-      filterString += `brightness(${filters.brightness * 100}%) `;
+      filterParts.push(`brightness(${filters.brightness * 100}%)`);
     }
     
-    // Add contrast filter
     if (filters.contrast !== undefined) {
-      filterString += `contrast(${filters.contrast * 100 + 100}%) `;
+      filterParts.push(`contrast(${filters.contrast * 100 + 100}%)`);
     }
 
-    // Add grayscale if enabled
     if (filters.isGrayscale) {
-      filterString += `grayscale(100%) `;
+      filterParts.push('grayscale(100%)');
+    }
+
+    if (filters.isInverted) {
+      filterParts.push('invert(100%)');
     }
     
-    // Apply the filters
-    ctx.filter = filterString;
+    // Apply all filters at once
+    ctx.filter = filterParts.join(' ');
 
-    // Draw the original image with filters applied
+    // Draw the original image with all filters applied in one pass
     ctx.drawImage(this.originalAtlas.getContext().canvas, 0, 0);
-
-    // Special handling for inversion since it's not easily done with filter string
-    if (filters.isInverted) {
-      ctx.globalCompositeOperation = 'difference';
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, width, height);
-      ctx.globalCompositeOperation = 'source-over';
-    }
 
     this.processedAtlas.update();
   }
