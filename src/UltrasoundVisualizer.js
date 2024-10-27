@@ -56,7 +56,7 @@ const UltrasoundVisualizer = ({
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(false);
   const [sliceRange, setSliceRange] = useState([0, 100]);
   const [textureAtlas, setTextureAtlas] = useState(null);
-  const [globalLightIntensity, setGlobalLightIntensity] = useState(1);
+  const [globalLightIntensity, setGlobalLightIntensity] = useState(2.5);  // Changed from 1 to 2.5
   const [showPresets, setShowPresets] = useState(false);
   const [isColorPaletteExpanded, setIsColorPaletteExpanded] = useState(false);
   const [targetFps, setTargetFps] = useState(60);
@@ -77,7 +77,7 @@ const UltrasoundVisualizer = ({
     stackLength: 1.5,
     framePercentage: 50,
     opacity: 0.3,
-    brightness: 1,  // Changed from 0.5 to 1
+    brightness: 0.5,
     blendMode: BABYLON.Constants.ALPHA_COMBINE,
     sliceRange: [0, 100],
     isFrameOrderInverted: false,
