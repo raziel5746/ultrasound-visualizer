@@ -19,6 +19,8 @@ class SceneManager {
     this.orthographicCamera = null;
     this.currentCamera = null;
     this.orthoZoomSensitivity = 0.03; // Fixed value instead of default
+    this.orthoPanSensitivity = 150; // Update this line
+    this.orthoExponent = 0.3; // This is already correct
   }
 
   initialize() {
@@ -83,6 +85,17 @@ class SceneManager {
     this.camera.lowerRadiusLimit = 10;
     this.camera.upperRadiusLimit = 150;
 
+    // Configure orthographic camera with adjusted panning
+    this.orthographicCamera.inertia = this.camera.inertia;
+    this.orthographicCamera.angularSensibilityX = this.camera.angularSensibilityX;
+    this.orthographicCamera.angularSensibilityY = this.camera.angularSensibilityY;
+    this.orthographicCamera.panningSensibility = 50; // Lower value = faster panning
+    this.orthographicCamera.wheelPrecision = this.camera.wheelPrecision;
+    this.orthographicCamera.lowerBetaLimit = this.camera.lowerBetaLimit;
+    this.orthographicCamera.upperBetaLimit = this.camera.upperBetaLimit;
+    this.orthographicCamera.lowerRadiusLimit = this.camera.lowerRadiusLimit;
+    this.orthographicCamera.upperRadiusLimit = this.camera.upperRadiusLimit;
+
     // Set up lighting
     this.globalLight = new BABYLON.HemisphericLight(
       "globalLight",
@@ -144,6 +157,10 @@ class SceneManager {
       }
       this.engine.resize();
     });
+
+    // Add observers to keep cameras in sync
+    this.perspectiveCamera.onViewMatrixChangedObservable.add(() => this.updateCameras());
+    this.orthographicCamera.onViewMatrixChangedObservable.add(() => this.updateCameras());
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
@@ -402,109 +419,110 @@ class SceneManager {
     const targetCamera = mode === 'orthographic' ? this.orthographicCamera : this.perspectiveCamera;
     
     if (targetCamera !== this.currentCamera) {
-      // Copy all camera parameters
-      targetCamera.alpha = this.currentCamera.alpha;
-      targetCamera.beta = this.currentCamera.beta;
-      targetCamera.target = this.currentCamera.target.clone();
-      
-      // Copy position and target, maintaining the relative position
-      const currentPosition = this.currentCamera.position.clone();
-      const currentTarget = this.currentCamera.target.clone();
-      const offset = currentPosition.subtract(currentTarget);
-      
-      // Convert zoom between perspective and orthographic
-      if (mode === 'orthographic') {
-        const orthoSize = this.perspectiveCamera.radius / 2.5;
-        this.updateOrthographicSize(orthoSize, this.canvas.width / this.canvas.height);
-        targetCamera.radius = this.perspectiveCamera.radius;
-      } else {
-        const currentOrthoSize = Math.abs(this.orthographicCamera.orthoTop);
-        targetCamera.radius = currentOrthoSize * 2.5;
-      }
-      
-      // Apply the position offset to maintain camera translation
-      targetCamera.target = currentTarget.clone();
-      targetCamera.position = targetCamera.target.add(offset);
-      
+      // Store current camera state
+      const currentState = {
+        alpha: this.currentCamera.alpha,
+        beta: this.currentCamera.beta,
+        radius: this.currentCamera.radius,
+        target: this.currentCamera.target.clone(),
+        position: this.currentCamera.position.clone()
+      };
+
       // Switch cameras
       this.currentCamera.detachControl();
-      
-      // Remove any existing wheel input before switching
-      if (this._wheelListener) {
-        this.canvas.removeEventListener('wheel', this._wheelListener);
-        this._wheelListener = null;
-      }
-      
-      // Remove existing wheel input from both cameras
-      this.perspectiveCamera.inputs.removeByType("ArcRotateCameraMouseWheelInput");
-      this.orthographicCamera.inputs.removeByType("ArcRotateCameraMouseWheelInput");
-      
       this.currentCamera = targetCamera;
       this.scene.activeCamera = targetCamera;
       this.camera = targetCamera;
-      
-      // Dispose of old pipeline
+
+      // Apply stored state to new camera
+      targetCamera.alpha = currentState.alpha;
+      targetCamera.beta = currentState.beta;
+      targetCamera.target = currentState.target;
+
+      if (mode === 'orthographic') {
+        const orthoSize = currentState.radius / 2.5;
+        this.updateOrthographicSize(orthoSize, this.canvas.width / this.canvas.height);
+        targetCamera.position = currentState.position;
+      } else {
+        targetCamera.radius = currentState.radius;
+      }
+
+      // Recreate pipeline
       if (this.defaultPipeline) {
         this.defaultPipeline.dispose();
       }
-      
-      // Create new pipeline with the target camera
       this.defaultPipeline = new BABYLON.DefaultRenderingPipeline(
         "defaultPipeline",
         true,
         this.scene,
         [targetCamera]
       );
+      // Reapply pipeline settings...
 
-      // Reapply pipeline settings
-      this.defaultPipeline.imageProcessing.enabled = true;
-      this.defaultPipeline.imageProcessing.exposure = 1;
-      this.defaultPipeline.imageProcessing.contrast = 1;
+      // Set up wheel behavior
+      this.setupWheelBehavior(mode);
 
-      // Reapply bloom settings
-      this.defaultPipeline.bloomEnabled = true;
-      this.defaultPipeline.bloomThreshold = 0.8;
-      this.defaultPipeline.bloomWeight = 0.3;
-      this.defaultPipeline.bloomKernel = 64;
-      this.defaultPipeline.bloomScale = 0.5;
-
-      // Reapply FXAA
-      this.defaultPipeline.fxaaEnabled = true;
-
-      // Reapply sharpening
-      this.defaultPipeline.sharpenEnabled = true;
-      this.defaultPipeline.sharpen.edgeAmount = 0.3;
-      this.defaultPipeline.sharpen.colorAmount = 1;
-      
-      // Handle wheel behavior for orthographic camera
-      if (mode === 'orthographic') {
-        const wheel = (event) => {
-          const delta = event.deltaY;
-          const zoomFactor = 1 + (delta > 0 ? this.orthoZoomSensitivity : -this.orthoZoomSensitivity);
-          
-          const currentSize = Math.abs(this.orthographicCamera.orthoTop);
-          const aspectRatio = this.canvas.width / this.canvas.height;
-          
-          // Use perspective camera limits to calculate ortho limits
-          const minOrthoSize = this.perspectiveCamera.lowerRadiusLimit / 2.5;
-          const maxOrthoSize = this.perspectiveCamera.upperRadiusLimit / 2.5;
-          
-          const newSize = Math.min(Math.max(currentSize * zoomFactor, minOrthoSize), maxOrthoSize);
-          
-          this.updateOrthographicSize(newSize, aspectRatio);
-          this.perspectiveCamera.radius = newSize * 2.5; // Keep perspective camera in sync
-          
-          event.preventDefault();
-        };
-        
-        this.canvas.addEventListener('wheel', wheel, { passive: false });
-        this._wheelListener = wheel;
-      } else {
-        // Add wheel input only to perspective camera
-        targetCamera.inputs.addMouseWheel();
-      }
-      
       this.currentCamera.attachControl(this.canvas, true);
+
+      // Update panning sensitivity
+      this.updatePanningSensitivity(mode);
+    }
+  }
+
+  setupWheelBehavior(mode) {
+    if (this._wheelListener) {
+      this.canvas.removeEventListener('wheel', this._wheelListener);
+      this._wheelListener = null;
+    }
+
+    if (mode === 'orthographic') {
+      this._wheelListener = (event) => {
+        const delta = event.deltaY;
+        const zoomFactor = 1 + (delta > 0 ? this.orthoZoomSensitivity : -this.orthoZoomSensitivity);
+        
+        const currentSize = Math.abs(this.orthographicCamera.orthoTop);
+        const aspectRatio = this.canvas.width / this.canvas.height;
+        
+        const minOrthoSize = this.perspectiveCamera.lowerRadiusLimit / 2.5;
+        const maxOrthoSize = this.perspectiveCamera.upperRadiusLimit / 2.5;
+        
+        const newSize = Math.min(Math.max(currentSize * zoomFactor, minOrthoSize), maxOrthoSize);
+        
+        this.updateOrthographicSize(newSize, aspectRatio);
+        this.perspectiveCamera.radius = newSize * 2.5;
+        
+        event.preventDefault();
+      };
+      this.canvas.addEventListener('wheel', this._wheelListener, { passive: false });
+    } else {
+      this.perspectiveCamera.inputs.addMouseWheel();
+    }
+  }
+
+  updatePanningSensitivity(mode) {
+    if (mode === 'orthographic') {
+      const currentSize = Math.abs(this.orthographicCamera.orthoTop);
+      const panningSensitivity = this.calculateOrthoPanningSensitivity(currentSize);
+      this.orthographicCamera.panningSensibility = panningSensitivity;
+    } else {
+      this.perspectiveCamera.panningSensibility = 200;
+    }
+  }
+
+  // Add this method to keep cameras in sync
+  updateCameras() {
+    if (this.currentCamera === this.orthographicCamera) {
+      const currentOrthoSize = Math.abs(this.orthographicCamera.orthoTop);
+      this.perspectiveCamera.radius = currentOrthoSize * 2.5;
+      this.perspectiveCamera.alpha = this.orthographicCamera.alpha;
+      this.perspectiveCamera.beta = this.orthographicCamera.beta;
+      this.perspectiveCamera.target = this.orthographicCamera.target.clone();
+    } else {
+      const orthoSize = this.perspectiveCamera.radius / 2.5;
+      this.updateOrthographicSize(orthoSize, this.canvas.width / this.canvas.height);
+      this.orthographicCamera.alpha = this.perspectiveCamera.alpha;
+      this.orthographicCamera.beta = this.perspectiveCamera.beta;
+      this.orthographicCamera.target = this.perspectiveCamera.target.clone();
     }
   }
 
@@ -513,6 +531,46 @@ class SceneManager {
     this.orthographicCamera.orthoRight = size * aspectRatio;
     this.orthographicCamera.orthoBottom = -size;
     this.orthographicCamera.orthoTop = size;
+
+    // Update panning sensitivity based on zoom level using a non-linear function
+    if (this.currentCamera === this.orthographicCamera) {
+      const panningSensitivity = this.calculateOrthoPanningSensitivity(size);
+      this.orthographicCamera.panningSensibility = panningSensitivity;
+    }
+
+    // Update perspective camera radius when orthographic size changes
+    this.perspectiveCamera.radius = size * 2.5;
+  }
+
+  calculateOrthoPanningSensitivity(size) {
+    const minSize = 5;
+    const maxSize = 60;
+    const minSensitivity = 10;
+    const maxSensitivity = 200;
+
+    const normalizedSize = (size - minSize) / (maxSize - minSize);
+    const factor = Math.pow(normalizedSize, this.orthoExponent); // Use the exponent here
+
+    const sensitivity = minSensitivity + (maxSensitivity - minSensitivity) * factor;
+    return sensitivity * (this.orthoPanSensitivity / 100);
+  }
+
+  setOrthoPanSensitivity(value) {
+    this.orthoPanSensitivity = value;
+    this.updateOrthoPanning();
+  }
+
+  setOrthoExponent(value) { // New method
+    this.orthoExponent = value;
+    this.updateOrthoPanning();
+  }
+
+  updateOrthoPanning() { // Helper method to update panning
+    if (this.currentCamera === this.orthographicCamera) {
+      const currentSize = Math.abs(this.orthographicCamera.orthoTop);
+      const panningSensitivity = this.calculateOrthoPanningSensitivity(currentSize);
+      this.orthographicCamera.panningSensibility = panningSensitivity;
+    }
   }
 }
 
