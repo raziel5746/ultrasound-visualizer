@@ -30,6 +30,8 @@ class TextureAtlas {
     this.atlas = null;
     this.frames = [];
     this.uvCoordinates = [];
+    this.originalAtlas = null;  // Store the original texture
+    this.processedAtlas = null; // Store the processed version
   }
 
   async createAtlas(frameCanvases) {
@@ -67,7 +69,9 @@ class TextureAtlas {
     this.packFrames(frameCanvases, ctx, width, height, scale);
     
     atlas.update(true);
-    this.atlas = atlas;
+    this.originalAtlas = atlas;
+    this.processedAtlas = atlas.clone();
+    this.atlas = this.processedAtlas; // This is what we'll use for rendering
   }
 
   tryPackFrames(frameCanvases, width, height, scale) {
@@ -172,6 +176,66 @@ class TextureAtlas {
       uv.x + uv.width, 1 - uv.y,  // Bottom-right
       uv.x, 1 - uv.y  // Bottom-left
     ];
+  }
+
+  // Add new method for applying filters
+  applyFilters(filters) {
+    const ctx = this.processedAtlas.getContext();
+    const originalCtx = this.originalAtlas.getContext();
+    const width = this.originalAtlas.getSize().width;
+    const height = this.originalAtlas.getSize().height;
+
+    // Get image data
+    const imageData = originalCtx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    // Apply brightness and contrast filters
+    if (filters.brightness !== undefined || filters.contrast !== undefined) {
+      const brightness = filters.brightness || 1;
+      const contrast = filters.contrast !== undefined ? filters.contrast : 0;
+      // Adjust factor calculation to handle 0 contrast
+      const factor = contrast === 0 ? 1 : (259 * (contrast * 100 + 255)) / (255 * (259 - contrast * 100));
+
+      for (let i = 0; i < data.length; i += 4) {
+        // Apply brightness first
+        let r = data[i] * brightness;
+        let g = data[i + 1] * brightness;
+        let b = data[i + 2] * brightness;
+
+        // Then apply contrast (only if contrast > 0)
+        if (contrast > 0) {
+          r = factor * (r - 128) + 128;
+          g = factor * (g - 128) + 128;
+          b = factor * (b - 128) + 128;
+        }
+
+        // Clamp values
+        data[i] = Math.min(255, Math.max(0, r));
+        data[i + 1] = Math.min(255, Math.max(0, g));
+        data[i + 2] = Math.min(255, Math.max(0, b));
+      }
+    }
+
+    // Apply inversion filter
+    if (filters.isInverted) {
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = 255 - data[i];
+        data[i + 1] = 255 - data[i + 1];
+        data[i + 2] = 255 - data[i + 2];
+      }
+    }
+
+    // Apply alpha-from-brightness filter
+    if (filters.alphaFromBrightness) {
+      for (let i = 0; i < data.length; i += 4) {
+        const brightness = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+        data[i + 3] = Math.round(brightness * 255);
+      }
+    }
+
+    // Put the modified image data back
+    ctx.putImageData(imageData, 0, 0);
+    this.processedAtlas.update();
   }
 }
 

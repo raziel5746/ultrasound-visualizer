@@ -72,11 +72,12 @@ const UltrasoundVisualizer = ({
   const [storedVideoFile, setStoredVideoFile] = useState(null);
   const [showExtractionScreen, setShowExtractionScreen] = useState(true);
 
+  // Update the defaultValues to set brightness to 1
   const defaultValues = useMemo(() => ({
     stackLength: 1.5,
     framePercentage: 50,
     opacity: 0.3,
-    brightness: 1,
+    brightness: 1,  // Changed from 0.5 to 1
     blendMode: BABYLON.Constants.ALPHA_COMBINE,
     sliceRange: [0, 100],
     isFrameOrderInverted: false,
@@ -821,6 +822,21 @@ const UltrasoundVisualizer = ({
     });
   }, []);
 
+  // Add new state for texture filters
+  const [textureFilters, setTextureFilters] = useState({
+    brightness: 1,
+    contrast: 0,  // Changed from 1 to 0
+    isInverted: false,
+    alphaFromBrightness: false
+  });
+
+  // Add handler for texture filter changes
+  const handleTextureFilterChange = useCallback((filters) => {
+    if (textureAtlas) {
+      textureAtlas.applyFilters(filters);
+    }
+  }, [textureAtlas]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -1299,6 +1315,9 @@ const UltrasoundVisualizer = ({
         }}
         frameAspectRatio={frameAspectRatio}
         isOrthographic={isOrthographic}
+        textureFilters={textureFilters}
+        setTextureFilters={setTextureFilters}
+        onTextureFilterChange={handleTextureFilterChange}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

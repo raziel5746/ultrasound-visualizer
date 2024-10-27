@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaExchangeAlt, FaLowVision } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
@@ -238,6 +238,9 @@ const ControlPanel = ({
   frameAspectRatio,
   children,
   isOrthographic,
+  textureFilters, 
+  setTextureFilters,
+  onTextureFilterChange,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -572,6 +575,90 @@ const ControlPanel = ({
           </div>
         </>
       )}
+      <ControlGroup isMobile={isMobile}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '15px' 
+        }}>
+          <h4 style={{ margin: 0 }}>Texture Filters</h4>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => {
+                const newFilters = { 
+                  ...textureFilters, 
+                  isInverted: !textureFilters.isInverted 
+                };
+                setTextureFilters(newFilters);
+                onTextureFilterChange(newFilters);
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '8px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                color: textureFilters.isInverted ? '#3498db' : '#ffffff',
+                transition: 'all 0.2s ease',
+              }}
+              title="Invert Colors"
+            >
+              <FaExchangeAlt size={20} />
+            </button>
+            <button
+              onClick={() => {
+                const newFilters = { 
+                  ...textureFilters, 
+                  alphaFromBrightness: !textureFilters.alphaFromBrightness 
+                };
+                setTextureFilters(newFilters);
+                onTextureFilterChange(newFilters);
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '8px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                color: textureFilters.alphaFromBrightness ? '#3498db' : '#ffffff',
+                transition: 'all 0.2s ease',
+              }}
+              title="Alpha from Brightness"
+            >
+              <FaLowVision size={20} />
+            </button>
+          </div>
+        </div>
+        <ControlItem
+          icon={<FaSun />}
+          label="Texture Brightness"
+          value={textureFilters.brightness}
+          min={0.1}
+          max={3}
+          step={0.1}
+          onChange={(value) => {
+            const newFilters = { ...textureFilters, brightness: value };
+            setTextureFilters(newFilters);
+            onTextureFilterChange(newFilters);
+          }}
+          isMobile={isMobile}
+        />
+        <ControlItem
+          icon={<FaAdjust />}
+          label="Texture Contrast"
+          value={textureFilters.contrast}
+          min={0}     // Changed from 0.1 to 0
+          max={3}
+          step={0.1}
+          onChange={(value) => {
+            const newFilters = { ...textureFilters, contrast: value };
+            setTextureFilters(newFilters);
+            onTextureFilterChange(newFilters);
+          }}
+          isMobile={isMobile}
+        />
+      </ControlGroup>
     </div>
   );
 };
