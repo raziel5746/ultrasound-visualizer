@@ -71,7 +71,7 @@ const UltrasoundVisualizer = ({
   const [storedVideoFile, setStoredVideoFile] = useState(null);
   const [showExtractionScreen, setShowExtractionScreen] = useState(true);
 
-  // Update the defaultValues to set brightness to 1
+  // Update the defaultValues object to include all filter values
   const defaultValues = useMemo(() => ({
     stackLength: 1.5,
     framePercentage: 50,
@@ -81,6 +81,16 @@ const UltrasoundVisualizer = ({
     sliceRange: [0, 100],
     isFrameOrderInverted: false,
     backgroundColor: '#000000',
+    globalLightIntensity: 2.5,
+    // Add these new default values
+    exposure: 1,
+    contrast: 1,
+    textureFilters: {
+      brightness: 1,
+      contrast: 0,
+      isInverted: false,
+      isGrayscale: false
+    }
   }), []);
 
   const [stackLength, setStackLength] = useState(defaultValues.stackLength);
@@ -547,6 +557,14 @@ const UltrasoundVisualizer = ({
     }
   }, [videoUrl, setError, extractFrames, isResolutionChange]);
 
+  // Add this before resetToDefaults
+  const handleTextureFilterChange = useCallback((filters) => {
+    if (textureAtlas) {
+      textureAtlas.applyFilters(filters);
+    }
+  }, [textureAtlas]);
+
+  // Then the resetToDefaults function
   const resetToDefaults = useCallback(() => {
     setStackLength(defaultValues.stackLength);
     setFramePercentage(defaultValues.framePercentage);
@@ -556,7 +574,13 @@ const UltrasoundVisualizer = ({
     setSliceRange(defaultValues.sliceRange);
     setIsFrameOrderInverted(defaultValues.isFrameOrderInverted);
     setBackgroundColor(defaultValues.backgroundColor);
-    setGlobalLightIntensity(1);
+    setGlobalLightIntensity(defaultValues.globalLightIntensity);
+    setExposure(defaultValues.exposure);
+    setContrast(defaultValues.contrast);
+    // Reset texture filters
+    setTextureFilters(defaultValues.textureFilters);
+    handleTextureFilterChange(defaultValues.textureFilters);
+    
     if (sceneManagerRef.current) {
       sceneManagerRef.current.updateCameraSettings({
         inertia: 0.5,
@@ -566,7 +590,7 @@ const UltrasoundVisualizer = ({
         wheelPrecision: 2
       });
     }
-  }, [defaultValues]);
+  }, [defaultValues, handleTextureFilterChange]);
 
   // Add a ref to store the current clipping bounds
   const currentClipBounds = useRef({
@@ -814,13 +838,6 @@ const UltrasoundVisualizer = ({
     isGrayscale: false
   });
 
-  // Add handler for texture filter changes
-  const handleTextureFilterChange = useCallback((filters) => {
-    if (textureAtlas) {
-      textureAtlas.applyFilters(filters);
-    }
-  }, [textureAtlas]);
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -962,16 +979,19 @@ const UltrasoundVisualizer = ({
                   style={{ cursor: 'pointer', color: 'white' }} 
                   onClick={resetCamera}
                   title="Reset Camera"
+                  size={24}  // Increased from default size
                 />
                 <FaExchangeAlt 
                   style={{ cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
                   onClick={toggleFrameOrderInversion}
                   title="Invert Frame Order"
+                  size={24}  // Increased from default size
                 />
                 <FaRedo
                   style={{ cursor: 'pointer', color: 'white' }}
                   onClick={resetToDefaults}
                   title="Reset to Defaults"
+                  size={24}  // Increased from default size
                 />
                 {/* Add B&W toggle */}
                 <FaRecordVinyl
@@ -989,6 +1009,7 @@ const UltrasoundVisualizer = ({
                     handleTextureFilterChange(newFilters);
                   }}
                   title="Toggle B&W"
+                  size={24}  // Increased from default size
                 />
                 {/* Add Invert Colors toggle */}
                 <FaYinYang
@@ -1006,6 +1027,7 @@ const UltrasoundVisualizer = ({
                     handleTextureFilterChange(newFilters);
                   }}
                   title="Invert Colors"
+                  size={24}  // Increased from default size
                 />
               </div>
             )}
