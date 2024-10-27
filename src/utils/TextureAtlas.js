@@ -30,6 +30,8 @@ class TextureAtlas {
     this.atlas = null;
     this.frames = [];
     this.uvCoordinates = [];
+    this.originalAtlas = null;  // Store the original texture
+    this.processedAtlas = null; // Store the processed version
   }
 
   async createAtlas(frameCanvases) {
@@ -67,7 +69,12 @@ class TextureAtlas {
     this.packFrames(frameCanvases, ctx, width, height, scale);
     
     atlas.update(true);
-    this.atlas = atlas;
+    this.originalAtlas = atlas;
+    this.processedAtlas = atlas.clone();
+    this.atlas = this.processedAtlas; // This is what we'll use for rendering
+
+    // Add this line to apply initial filters
+    this.applyFilters({ brightness: 1, contrast: 0 });  // Apply default filters
   }
 
   tryPackFrames(frameCanvases, width, height, scale) {
@@ -172,6 +179,43 @@ class TextureAtlas {
       uv.x + uv.width, 1 - uv.y,  // Bottom-right
       uv.x, 1 - uv.y  // Bottom-left
     ];
+  }
+
+  // Add new method for applying filters
+  applyFilters(filters) {
+    const ctx = this.processedAtlas.getContext();
+    const width = this.originalAtlas.getSize().width;
+    const height = this.originalAtlas.getSize().height;
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Combine all filters into a single filter string
+    const filterParts = [];
+    
+    if (filters.brightness !== undefined) {
+      filterParts.push(`brightness(${filters.brightness * 100}%)`);
+    }
+    
+    if (filters.contrast !== undefined) {
+      filterParts.push(`contrast(${filters.contrast * 100 + 100}%)`);
+    }
+
+    if (filters.isGrayscale) {
+      filterParts.push('grayscale(100%)');
+    }
+
+    if (filters.isInverted) {
+      filterParts.push('invert(100%)');
+    }
+    
+    // Apply all filters at once
+    ctx.filter = filterParts.join(' ');
+
+    // Draw the original image with all filters applied in one pass
+    ctx.drawImage(this.originalAtlas.getContext().canvas, 0, 0);
+
+    this.processedAtlas.update();
   }
 }
 
