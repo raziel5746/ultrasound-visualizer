@@ -72,6 +72,9 @@ class TextureAtlas {
     this.originalAtlas = atlas;
     this.processedAtlas = atlas.clone();
     this.atlas = this.processedAtlas; // This is what we'll use for rendering
+
+    // Add this line to apply initial filters
+    this.applyFilters({ brightness: 1, contrast: 0 });  // Apply default filters
   }
 
   tryPackFrames(frameCanvases, width, height, scale) {
