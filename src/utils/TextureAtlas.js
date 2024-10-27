@@ -184,60 +184,47 @@ class TextureAtlas {
   // Add new method for applying filters
   applyFilters(filters) {
     const ctx = this.processedAtlas.getContext();
-    const originalCtx = this.originalAtlas.getContext();
     const width = this.originalAtlas.getSize().width;
     const height = this.originalAtlas.getSize().height;
 
-    // Get image data
-    const imageData = originalCtx.getImageData(0, 0, width, height);
-    const data = imageData.data;
+    // Clear any previous filters
+    ctx.filter = 'none';
+    
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);
 
-    // Apply brightness and contrast filters
-    if (filters.brightness !== undefined || filters.contrast !== undefined) {
-      const brightness = filters.brightness || 1;
-      const contrast = filters.contrast !== undefined ? filters.contrast : 0;
-      // Adjust factor calculation to handle 0 contrast
-      const factor = contrast === 0 ? 1 : (259 * (contrast * 100 + 255)) / (255 * (259 - contrast * 100));
-
-      for (let i = 0; i < data.length; i += 4) {
-        // Apply brightness first
-        let r = data[i] * brightness;
-        let g = data[i + 1] * brightness;
-        let b = data[i + 2] * brightness;
-
-        // Then apply contrast (only if contrast > 0)
-        if (contrast > 0) {
-          r = factor * (r - 128) + 128;
-          g = factor * (g - 128) + 128;
-          b = factor * (b - 128) + 128;
-        }
-
-        // Clamp values
-        data[i] = Math.min(255, Math.max(0, r));
-        data[i + 1] = Math.min(255, Math.max(0, g));
-        data[i + 2] = Math.min(255, Math.max(0, b));
-      }
+    // Build the filter string
+    let filterString = '';
+    
+    // Add brightness filter
+    if (filters.brightness !== undefined) {
+      filterString += `brightness(${filters.brightness * 100}%) `;
+    }
+    
+    // Add contrast filter
+    if (filters.contrast !== undefined) {
+      filterString += `contrast(${filters.contrast * 100 + 100}%) `;
     }
 
-    // Apply inversion filter
+    // Add grayscale if enabled
+    if (filters.isGrayscale) {
+      filterString += `grayscale(100%) `;
+    }
+    
+    // Apply the filters
+    ctx.filter = filterString;
+
+    // Draw the original image with filters applied
+    ctx.drawImage(this.originalAtlas.getContext().canvas, 0, 0);
+
+    // Special handling for inversion since it's not easily done with filter string
     if (filters.isInverted) {
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = 255 - data[i];
-        data[i + 1] = 255 - data[i + 1];
-        data[i + 2] = 255 - data[i + 2];
-      }
+      ctx.globalCompositeOperation = 'difference';
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalCompositeOperation = 'source-over';
     }
 
-    // Apply alpha-from-brightness filter
-    if (filters.alphaFromBrightness) {
-      for (let i = 0; i < data.length; i += 4) {
-        const brightness = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
-        data[i + 3] = Math.round(brightness * 255);
-      }
-    }
-
-    // Put the modified image data back
-    ctx.putImageData(imageData, 0, 0);
     this.processedAtlas.update();
   }
 }

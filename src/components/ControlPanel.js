@@ -1,65 +1,64 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaExchangeAlt, FaLowVision } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaExchangeAlt, FaImage } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
 import SliceControl from './SliceControl';
-import useDebounce from '../hooks/useDebounce';
 
 const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', convertValue, displayValue, onImmediateChange, isMobile }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [localValue, setLocalValue] = useState(value);
-  const debouncedValue = useDebounce(localValue, 16);
-  const lastImmediateValue = useRef(value);
-  const lastUpdateTime = useRef(0);
-  const updateScheduled = useRef(false);
+  const rafId = useRef(null);
+  const pendingValue = useRef(null);
+  
+  // Cleanup RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+      }
+    };
+  }, []);
 
   // Only update local value from props when not dragging
   useEffect(() => {
     if (!isDragging) {
       setLocalValue(value);
-      lastImmediateValue.current = value;
     }
   }, [value, isDragging]);
 
-  // Apply debounced value
-  useEffect(() => {
-    if (isDragging && Math.abs(debouncedValue - lastImmediateValue.current) > Number.EPSILON) {
-      lastImmediateValue.current = debouncedValue;
-      onChange(debouncedValue);
-    }
-  }, [debouncedValue, onChange, isDragging]);
-
-  const scheduleUpdate = useCallback((newValue) => {
-    if (!updateScheduled.current) {
-      updateScheduled.current = true;
-      requestAnimationFrame(() => {
-        const now = performance.now();
-        if (now - lastUpdateTime.current >= 16) {
+  const scheduleUpdate = (newValue) => {
+    pendingValue.current = newValue;
+    
+    if (!rafId.current) {
+      rafId.current = requestAnimationFrame(() => {
+        if (pendingValue.current !== null) {
+          onChange(pendingValue.current);
           if (onImmediateChange) {
-            onImmediateChange(newValue);
+            onImmediateChange(pendingValue.current);
           }
-          lastUpdateTime.current = now;
+          pendingValue.current = null;
         }
-        updateScheduled.current = false;
+        rafId.current = null;
       });
     }
-  }, [onImmediateChange]);
+  };
 
   const handleChange = (e) => {
     const newValue = parseFloat(e.target.value);
     setLocalValue(newValue);
-    lastImmediateValue.current = newValue;
     scheduleUpdate(newValue);
   };
 
   const handleDragEnd = () => {
     setIsDragging(false);
-    if (Math.abs(localValue - value) > Number.EPSILON) {
-      onChange(localValue);
+    // Ensure final value is applied
+    if (pendingValue.current !== null) {
+      onChange(pendingValue.current);
       if (onImmediateChange) {
-        onImmediateChange(localValue);
+        onImmediateChange(pendingValue.current);
       }
+      pendingValue.current = null;
     }
   };
 
@@ -73,15 +72,12 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
         display: 'flex', 
         alignItems: 'center', 
         marginBottom: '8px',
-        fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
+        fontSize: isMobile ? '14px' : '16px',
         fontWeight: '500',
         color: '#ffffff',
         opacity: 0.9
       }}>
-        {icon && <span style={{ 
-          marginRight: '10px',
-          color: '#ffffff'
-        }}>{icon}</span>}
+        {icon && <span style={{ marginRight: '10px', color: '#ffffff' }}>{icon}</span>}
         {label}:
       </label>
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -100,7 +96,7 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
           style={{ flex: 1, marginRight: isMobile ? 0 : '10px' }}
         />
         {!isMobile && (
-          <span style={{ minWidth: '50px', textAlign: 'right', fontSize: '16px' }}> {/* Updated to 16px */}
+          <span style={{ minWidth: '50px', textAlign: 'right', fontSize: '16px' }}>
             {(displayValue || ((v) => v.toFixed(2)))(convertValue ? convertValue(localValue) : localValue)}{unit}
           </span>
         )}
@@ -195,7 +191,7 @@ const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
 );
 
 // Update the ControlGroup component to accept isMobile prop
-export const ControlGroup = ({ children, isMobile }) => (
+export const ControlGroup = ({ children, isMobile, style }) => (
   <div style={{ 
     marginBottom: isMobile ? '16px' : '0px', // Reduced from 20px to 15px for desktop
     padding: isMobile ? '12px' : '15px',
@@ -204,7 +200,8 @@ export const ControlGroup = ({ children, isMobile }) => (
     border: '1px solid #404040',
     width: '100%',
     boxSizing: 'border-box',
-    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)'
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
+    ...style // Spread the style prop
   }}>
     {children}
   </div>
@@ -257,7 +254,6 @@ const ControlPanel = ({
     { name: 'Normal', value: BABYLON.Constants.ALPHA_COMBINE },
     { name: 'Add', value: BABYLON.Constants.ALPHA_ADD },
     { name: 'Subtract', value: BABYLON.Constants.ALPHA_SUBTRACT },
-    { name: 'Multiply', value: BABYLON.Constants.ALPHA_MULTIPLY },
     { name: 'Maximum', value: BABYLON.Constants.ALPHA_MAXIMIZED },
   ];
 
@@ -575,7 +571,7 @@ const ControlPanel = ({
           </div>
         </>
       )}
-      <ControlGroup isMobile={isMobile}>
+      <ControlGroup isMobile={isMobile} style={{ marginTop: isMobile ? 0 : '24px' }}>
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
@@ -584,6 +580,28 @@ const ControlPanel = ({
         }}>
           <h4 style={{ margin: 0 }}>Texture Filters</h4>
           <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => {
+                const newFilters = { 
+                  ...textureFilters, 
+                  isGrayscale: !textureFilters.isGrayscale 
+                };
+                setTextureFilters(newFilters);
+                onTextureFilterChange(newFilters);
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '8px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                color: textureFilters.isGrayscale ? '#3498db' : '#ffffff',
+                transition: 'all 0.2s ease',
+              }}
+              title="Toggle B&W"
+            >
+              <FaImage size={20} />
+            </button>
             <button
               onClick={() => {
                 const newFilters = { 
@@ -606,33 +624,12 @@ const ControlPanel = ({
             >
               <FaExchangeAlt size={20} />
             </button>
-            <button
-              onClick={() => {
-                const newFilters = { 
-                  ...textureFilters, 
-                  alphaFromBrightness: !textureFilters.alphaFromBrightness 
-                };
-                setTextureFilters(newFilters);
-                onTextureFilterChange(newFilters);
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '8px',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                color: textureFilters.alphaFromBrightness ? '#3498db' : '#ffffff',
-                transition: 'all 0.2s ease',
-              }}
-              title="Alpha from Brightness"
-            >
-              <FaLowVision size={20} />
-            </button>
           </div>
         </div>
+
         <ControlItem
           icon={<FaSun />}
-          label="Texture Brightness"
+          label="Brightness"
           value={textureFilters.brightness}
           min={0.1}
           max={3}
@@ -644,11 +641,12 @@ const ControlPanel = ({
           }}
           isMobile={isMobile}
         />
+
         <ControlItem
           icon={<FaAdjust />}
-          label="Texture Contrast"
+          label="Contrast"
           value={textureFilters.contrast}
-          min={0}     // Changed from 0.1 to 0
+          min={0}
           max={3}
           step={0.1}
           onChange={(value) => {

@@ -822,12 +822,12 @@ const UltrasoundVisualizer = ({
     });
   }, []);
 
-  // Add new state for texture filters
+  // Update the initial state to remove alphaFromBrightness
   const [textureFilters, setTextureFilters] = useState({
     brightness: 1,
-    contrast: 0,  // Changed from 1 to 0
+    contrast: 0,
     isInverted: false,
-    alphaFromBrightness: false
+    isGrayscale: false
   });
 
   // Add handler for texture filter changes
