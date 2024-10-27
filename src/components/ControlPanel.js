@@ -307,7 +307,7 @@ const ControlPanel = ({
           <div style={{ 
             display: 'flex', 
             flexDirection: isMobile ? 'row' : 'column', 
-            gap: isMobile ? '8px' : '24px', // Reduced from 25px to 20px for desktop
+            gap: isMobile ? '8px' : '24px',
             height: isMobile ? '100%' : 'auto',
             maxWidth: '100%',
             margin: '0 auto',
