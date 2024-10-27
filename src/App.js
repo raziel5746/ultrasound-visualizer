@@ -12,10 +12,6 @@ function App() {
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      console.log('Original file:', file);
-      console.log('Original file name:', file.name);
-      console.log('Original file type:', file.type);
-      
       // Clear the previous video URL first
       if (videoUrl) {
         URL.revokeObjectURL(videoUrl);
@@ -23,7 +19,6 @@ function App() {
       
       // Create new URL and set it
       const newUrl = URL.createObjectURL(file);
-      console.log('Created URL:', newUrl);
       setVideoUrl(newUrl);
       setFileName(file.name);
     }

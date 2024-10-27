@@ -225,8 +225,6 @@ const UltrasoundVisualizer = ({
     return new Promise((resolve, reject) => {
         const currentExtractionId = latestExtractionId.current;
         
-        console.log('8. Extract frames started, HD mode:', currentHDMode.current);
-        
         if (currentExtractionRef.current) {
             currentExtractionRef.current.cancel();
         }
@@ -234,7 +232,6 @@ const UltrasoundVisualizer = ({
         let isCancelled = false;
         currentExtractionRef.current = { 
             cancel: () => { 
-                console.log('Extraction cancelled');
                 isCancelled = true; 
             } 
         };
@@ -292,10 +289,6 @@ const UltrasoundVisualizer = ({
                 return;
             }
 
-            if (currentFrame === 0) {
-              console.log('9. Processing first frame');
-            }
-            
             video.currentTime = (currentFrame * frameStep) / 30;
             video.onseeked = () => {
               const canvas = document.createElement('canvas');
@@ -333,12 +326,6 @@ const UltrasoundVisualizer = ({
               // Update video info with scaled dimensions and scale factor
               if (currentFrame === 0) {
                 const scaleFactor = (scaledWidth / video.videoWidth).toFixed(2);
-                console.log('10. First frame dimensions:', {
-                  original: `${video.videoWidth}×${video.videoHeight}`,
-                  scaled: `${scaledWidth}×${scaledHeight}`,
-                  scaleFactor,
-                  isHD: currentHDMode.current
-                });
                 setVideoInfo(prev => ({
                   ...prev,
                   originalWidth: video.videoWidth,
@@ -383,7 +370,6 @@ const UltrasoundVisualizer = ({
           try {
             const atlas = new TextureAtlas(sceneManagerRef.current.getScene());
             await atlas.createAtlas(frameCanvases);
-            console.log('11. Texture atlas created');
             setTextureAtlas(atlas);
             resolve(frameCanvases.length);
           } catch (error) {
@@ -394,7 +380,6 @@ const UltrasoundVisualizer = ({
 
         extractAllFrames().catch(reject).finally(() => {
           currentExtractionRef.current = null;
-          console.log('13. Extract frames process completed');
         });
     });
   }, [externalRectangle, isResolutionChange]); // Remove isHDMode from dependencies
@@ -402,8 +387,7 @@ const UltrasoundVisualizer = ({
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
     if (!storedVideoFile) return;
-    
-    console.log('1. Resolution toggle started');
+
     isResolutionChange.current = true;
     
     // Cancel any ongoing extraction
@@ -418,7 +402,6 @@ const UltrasoundVisualizer = ({
     // Toggle HD mode immediately and wait for the state to update
     await new Promise(resolve => {
         setHDMode(prev => {
-            console.log(`2. HD mode toggled to: ${!prev}`);
             return !prev;
         });
         // Use setTimeout to ensure the state has updated
@@ -427,7 +410,6 @@ const UltrasoundVisualizer = ({
     
     // Reset states but don't show extraction screen
     requestAnimationFrame(() => {
-        console.log('3. Resetting states');
         setTextureAtlas(null);
         setIsLocalLoading(true);
         setError(null);
@@ -453,27 +435,22 @@ const UltrasoundVisualizer = ({
 
         // Check if this is still the latest extraction
         if (currentExtractionId !== latestExtractionId.current) {
-            console.log('Extraction cancelled - newer extraction started');
             return;
         }
 
-        console.log('4. Starting frame extraction');
         await video.play();
         video.pause();
         const frameCount = await extractFrames(video);
 
         // Check again if this is still the latest extraction
         if (currentExtractionId !== latestExtractionId.current) {
-            console.log('Extraction cancelled - newer extraction started');
             return;
         }
 
-        console.log('5. Frame extraction completed');
         setTotalFrames(frameCount);
         setIsLocalLoading(false);
     } catch (error) {
         if (error.message !== 'Frame extraction cancelled') {
-            console.error('6. Error during extraction:', error.message);
             setError(`Error extracting frames: ${error.message}`);
             setIsLocalLoading(false);
         }
@@ -481,7 +458,6 @@ const UltrasoundVisualizer = ({
         URL.revokeObjectURL(video.src);
         if (currentExtractionId === latestExtractionId.current) {
             isResolutionChange.current = false;
-            console.log('7. Resolution change process completed');
         }
         video.remove(); // Clean up the video element
     }
