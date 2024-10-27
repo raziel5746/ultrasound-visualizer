@@ -236,7 +236,8 @@ const ControlPanel = ({
   onRectangleChange, // Add this
   style, // Add this prop
   frameAspectRatio,
-  children
+  children,
+  isOrthographic,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
