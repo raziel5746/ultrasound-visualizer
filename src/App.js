@@ -6,17 +6,26 @@ import { FaFileUpload } from 'react-icons/fa';
 function App() {
   const [videoUrl, setVideoUrl] = useState(null);
   const [error, setError] = useState(null);
+  const [fileName, setFileName] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
+      console.log('Original file:', file);
+      console.log('Original file name:', file.name);
+      console.log('Original file type:', file.type);
+      
       // Clear the previous video URL first
       if (videoUrl) {
         URL.revokeObjectURL(videoUrl);
       }
+      
       // Create new URL and set it
-      setVideoUrl(URL.createObjectURL(file));
+      const newUrl = URL.createObjectURL(file);
+      console.log('Created URL:', newUrl);
+      setVideoUrl(newUrl);
+      setFileName(file.name);
     }
   };
 
@@ -52,6 +61,7 @@ function App() {
             {error && <p className="error">{error}</p>}
             <UltrasoundVisualizer
               videoUrl={videoUrl}
+              fileName={fileName}
               setError={setError}
               onFileSelect={handleChooseFile}
               setVideoUrl={setVideoUrl}

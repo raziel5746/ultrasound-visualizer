@@ -23,6 +23,7 @@ const HD_DIMENSIONS = {
 
 const UltrasoundVisualizer = ({ 
   videoUrl, 
+  fileName, // This is the prop
   setError, 
   onFileSelect,
   externalRectangle
@@ -90,8 +91,8 @@ const UltrasoundVisualizer = ({
   const [isFrameOrderInverted, setIsFrameOrderInverted] = useState(defaultValues.isFrameOrderInverted);
   const [backgroundColor, setBackgroundColor] = useState(defaultValues.backgroundColor);
 
-  // Add state for file name
-  const [fileName, setFileName] = useState('');
+  // Change this state variable name to displayFileName
+  const [displayFileName, setDisplayFileName] = useState('');
 
   // Add color map state and parameters
   const [colorMap, setColorMap] = useState('DEFAULT');
@@ -103,34 +104,16 @@ const UltrasoundVisualizer = ({
     setColorMapParams(defaultParams);
   }, [colorMap]);
 
-  // Update the file name when videoUrl changes
+  // Update the useEffect to use the new state variable name
   useEffect(() => {
-    if (videoUrl) {
-      if (videoUrl instanceof Blob) {
-        // For files uploaded through input
-        const name = videoUrl.name;
-        // If name doesn't include extension, try to get it from type
-        if (!name.includes('.')) {
-          const extension = videoUrl.type.split('/')[1];
-          setFileName(`${name}.${extension}`);
-        } else {
-          setFileName(name);
-        }
-      } else {
-        // For URLs, extract the file name from the path
-        const urlPath = videoUrl.split('/').pop().split('?')[0];
-        const name = decodeURIComponent(urlPath);
-        // If name doesn't include extension, add .mp4 as default
-        if (!name.includes('.')) {
-          setFileName(`${name}.mp4`);
-        } else {
-          setFileName(name);
-        }
-      }
+    if (fileName) {
+      setDisplayFileName(fileName);
     } else {
-      setFileName('No file selected');
+      setDisplayFileName('No file selected');
     }
-  }, [videoUrl]);
+  }, [fileName]);
+
+  // Remove or comment out the old useEffect that was trying to extract the file name from videoUrl
 
   // Move updateFrameStack definition before its first use
   // Add this before the useEffect that uses it (around line 138)
@@ -899,9 +882,9 @@ const UltrasoundVisualizer = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              padding: '0 45px', // Increased padding to accommodate larger HD button
+              padding: '0 45px',
             }}>
-              {fileName}
+              {displayFileName}
             </div>
 
             {/* HD/SD Toggle Button - moved to top right */}
