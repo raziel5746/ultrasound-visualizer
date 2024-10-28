@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, Suspense } from 'react';
 import './App.css';
-import UltrasoundVisualizer from './UltrasoundVisualizer';
 import { FaFileUpload } from 'react-icons/fa';
+
+const UltrasoundVisualizer = React.lazy(() => import('./UltrasoundVisualizer'));
 
 function App() {
   const [videoUrl, setVideoUrl] = useState(null);
@@ -54,13 +55,15 @@ function App() {
         ) : (
           <>
             {error && <p className="error">{error}</p>}
-            <UltrasoundVisualizer
-              videoUrl={videoUrl}
-              fileName={fileName}
-              setError={setError}
-              onFileSelect={handleChooseFile}
-              setVideoUrl={setVideoUrl}
-            />
+            <Suspense fallback={<div>Loading...</div>}>
+              <UltrasoundVisualizer
+                videoUrl={videoUrl}
+                fileName={fileName}
+                setError={setError}
+                onFileSelect={handleChooseFile}
+                setVideoUrl={setVideoUrl}
+              />
+            </Suspense>
           </>
         )}
       </main>
