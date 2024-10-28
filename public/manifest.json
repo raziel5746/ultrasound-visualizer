@@ -16,14 +16,28 @@
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any"
     }
   ],
-  "start_url": ".",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "theme_color": "#282c34",
   "background_color": "#1a1a1a",
   "orientation": "any",
+  "categories": ["utilities", "medical"],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Upload Video",
+      "url": "/?action=upload",
+      "description": "Upload a new ultrasound video",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ],
   "screenshots": [
     {
       "src": "screenshot-wide.png",
