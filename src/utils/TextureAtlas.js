@@ -32,60 +32,94 @@ class TextureAtlas {
     this.uvCoordinates = [];
     this.originalAtlas = null;  // Store the original texture
     this.processedAtlas = null; // Store the processed version
+    this.bitmapCache = new Map(); // Add this to store ImageBitmaps
   }
 
-  async createAtlas(frameCanvases) {
-    let { width, height, scale } = this.calculateOptimalAtlasSize(frameCanvases);
-    let allFramesFit = false;
+  // Add new method to create ImageBitmap from video frame
+  static async createFrameBitmaps(video, frameCount) {
+    const bitmapPromises = [];
+    const frameInterval = video.duration / frameCount;
     
-    // Keep reducing scale until all frames fit
-    while (!allFramesFit) {
-      // First ensure we're within maximum texture size
-      while (width > this.maxSize || height > this.maxSize) {
-        scale *= 0.9; // Reduce scale by 10%
-        ({ width, height } = this.calculateOptimalAtlasSize(frameCanvases, scale));
-      }
-
-      // Try to pack all frames with current dimensions
-      const packingResult = this.tryPackFrames(frameCanvases, width, height, scale);
-      
-      if (packingResult.success) {
-        allFramesFit = true;
-      } else {
-        // If frames don't fit, reduce scale and try again
-        scale *= 0.9;
-        ({ width, height } = this.calculateOptimalAtlasSize(frameCanvases, scale));
-      }
+    for (let i = 0; i < frameCount; i++) {
+      video.currentTime = i * frameInterval;
+      bitmapPromises.push(
+        new Promise(resolve => {
+          video.onseeked = () => {
+            createImageBitmap(video).then(resolve);
+          };
+        })
+      );
     }
 
-    const atlas = new BABYLON.DynamicTexture('atlas', { width, height }, this.scene, false);
-    const ctx = atlas.getContext();
-
-    // Enable image smoothing for better quality
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    // Pack the frames using the successful configuration
-    this.packFrames(frameCanvases, ctx, width, height, scale);
-    
-    atlas.update(true);
-    this.originalAtlas = atlas;
-    this.processedAtlas = atlas.clone();
-    this.atlas = this.processedAtlas; // This is what we'll use for rendering
-
-    // Add this line to apply initial filters
-    this.applyFilters({ brightness: 1, contrast: 0 });  // Apply default filters
+    return Promise.all(bitmapPromises);
   }
 
-  tryPackFrames(frameCanvases, width, height, scale) {
+  async createAtlas(frameBitmaps) {
+    try {
+      let { width, height, scale } = this.calculateOptimalAtlasSize(frameBitmaps);
+      let allFramesFit = false;
+      
+      while (!allFramesFit) {
+        while (width > this.maxSize || height > this.maxSize) {
+          scale *= 0.9;
+          ({ width, height } = this.calculateOptimalAtlasSize(frameBitmaps, scale));
+        }
+
+        const packingResult = this.tryPackFrames(frameBitmaps, width, height, scale);
+        
+        if (packingResult.success) {
+          allFramesFit = true;
+        } else {
+          scale *= 0.9;
+          ({ width, height } = this.calculateOptimalAtlasSize(frameBitmaps, scale));
+        }
+      }
+
+      const atlas = new BABYLON.DynamicTexture('atlas', { width, height }, this.scene, false);
+      const ctx = atlas.getContext();
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Pack the frames using ImageBitmap
+      await this.packFrameBitmaps(frameBitmaps, ctx, width, height, scale);
+      
+      atlas.update(true);
+      this.originalAtlas = atlas;
+      this.processedAtlas = atlas.clone();
+      this.atlas = this.processedAtlas;
+
+      // Apply initial filters
+      this.applyFilters({ brightness: 1, contrast: 0 });
+
+      // Clean up bitmaps after they're packed
+      frameBitmaps.forEach(bitmap => {
+        if (bitmap instanceof ImageBitmap) {
+          bitmap.close();
+        }
+      });
+
+      return this.atlas;
+    } catch (error) {
+      // Clean up on error
+      frameBitmaps.forEach(bitmap => {
+        if (bitmap instanceof ImageBitmap) {
+          bitmap.close();
+        }
+      });
+      throw error;
+    }
+  }
+
+  tryPackFrames(frameBitmaps, width, height, scale) {
     let x = 0;
     let y = 0;
     let rowHeight = 0;
 
-    for (let i = 0; i < frameCanvases.length; i++) {
-      const canvas = frameCanvases[i];
-      const scaledWidth = Math.floor(canvas.width * scale);
-      const scaledHeight = Math.floor(canvas.height * scale);
+    for (let i = 0; i < frameBitmaps.length; i++) {
+      const bitmap = frameBitmaps[i];
+      const scaledWidth = Math.floor(bitmap.width * scale);
+      const scaledHeight = Math.floor(bitmap.height * scale);
 
       if (x + scaledWidth > width) {
         x = 0;
@@ -104,7 +138,7 @@ class TextureAtlas {
     return { success: true };
   }
 
-  packFrames(frameCanvases, ctx, width, height, scale) {
+  packFrames(frameBitmaps, ctx, width, height, scale) {
     let x = 0;
     let y = 0;
     let rowHeight = 0;
@@ -112,10 +146,10 @@ class TextureAtlas {
     this.frames = [];
     this.uvCoordinates = [];
 
-    for (let i = 0; i < frameCanvases.length; i++) {
-      const canvas = frameCanvases[i];
-      const scaledWidth = Math.floor(canvas.width * scale);
-      const scaledHeight = Math.floor(canvas.height * scale);
+    for (let i = 0; i < frameBitmaps.length; i++) {
+      const bitmap = frameBitmaps[i];
+      const scaledWidth = Math.floor(bitmap.width * scale);
+      const scaledHeight = Math.floor(bitmap.height * scale);
 
       if (x + scaledWidth > width) {
         x = 0;
@@ -123,7 +157,7 @@ class TextureAtlas {
         rowHeight = 0;
       }
 
-      ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, scaledWidth, scaledHeight);
+      ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height, x, y, scaledWidth, scaledHeight);
 
       this.frames.push({
         x,
@@ -144,14 +178,14 @@ class TextureAtlas {
     }
   }
 
-  calculateOptimalAtlasSize(frameCanvases, scale = 1) {
+  calculateOptimalAtlasSize(frameBitmaps, scale = 1) {
     let totalArea = 0;
     let maxWidth = 0;
     let maxHeight = 0;
 
-    frameCanvases.forEach(canvas => {
-      const scaledWidth = Math.floor(canvas.width * scale);
-      const scaledHeight = Math.floor(canvas.height * scale);
+    frameBitmaps.forEach(bitmap => {
+      const scaledWidth = Math.floor(bitmap.width * scale);
+      const scaledHeight = Math.floor(bitmap.height * scale);
       totalArea += scaledWidth * scaledHeight;
       maxWidth = Math.max(maxWidth, scaledWidth);
       maxHeight = Math.max(maxHeight, scaledHeight);
@@ -160,7 +194,6 @@ class TextureAtlas {
     let width = Math.max(maxWidth, Math.ceil(Math.sqrt(totalArea)));
     let height = Math.ceil(totalArea / width);
 
-    // Ensure width and height are powers of 2 for optimal texture performance
     width = this.nextPowerOfTwo(width);
     height = this.nextPowerOfTwo(height);
 
@@ -216,6 +249,124 @@ class TextureAtlas {
     ctx.drawImage(this.originalAtlas.getContext().canvas, 0, 0);
 
     this.processedAtlas.update();
+  }
+
+  // Add new method to pack ImageBitmaps
+  async packFrameBitmaps(frameBitmaps, ctx, width, height, scale) {
+    let x = 0;
+    let y = 0;
+    let rowHeight = 0;
+
+    this.frames = [];
+    this.uvCoordinates = [];
+
+    for (let i = 0; i < frameBitmaps.length; i++) {
+      const bitmap = frameBitmaps[i];
+      const scaledWidth = Math.floor(bitmap.width * scale);
+      const scaledHeight = Math.floor(bitmap.height * scale);
+
+      if (x + scaledWidth > width) {
+        x = 0;
+        y += rowHeight;
+        rowHeight = 0;
+      }
+
+      ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height, x, y, scaledWidth, scaledHeight);
+
+      this.frames.push({
+        x,
+        y,
+        width: scaledWidth,
+        height: scaledHeight
+      });
+
+      this.uvCoordinates.push({
+        x: x / width,
+        y: y / height,
+        width: scaledWidth / width,
+        height: scaledHeight / height
+      });
+
+      x += scaledWidth;
+      rowHeight = Math.max(rowHeight, scaledHeight);
+    }
+  }
+
+  // Add cleanup method
+  dispose() {
+    // Clean up ImageBitmaps
+    for (const bitmap of this.bitmapCache.values()) {
+      bitmap.close();
+    }
+    this.bitmapCache.clear();
+    
+    // Clean up existing textures
+    if (this.originalAtlas) {
+      this.originalAtlas.dispose();
+    }
+    if (this.processedAtlas) {
+      this.processedAtlas.dispose();
+    }
+  }
+
+  async createProgressiveAtlas(video, frameCount, onProgress) {
+    const batchSize = 10; // Process 10 frames at a time
+    const frames = [];
+    
+    for (let i = 0; i < frameCount; i += batchSize) {
+      const batchFrames = await this.extractFrameBatch(video, i, Math.min(batchSize, frameCount - i));
+      frames.push(...batchFrames);
+      
+      if (onProgress) {
+        onProgress(i / frameCount);
+      }
+    }
+    
+    return this.createAtlas(frames);
+  }
+
+  async createAtlasWithWorker(frameBitmaps) {
+    try {
+      const { width, height, scale } = this.calculateOptimalAtlasSize(frameBitmaps);
+      
+      // Create and setup worker
+      const worker = new Worker(new URL('../workers/TexturePackerWorker.js', import.meta.url));
+      
+      // Create promise to handle worker response
+      const atlasData = await new Promise((resolve, reject) => {
+        worker.onmessage = (e) => {
+          const { buffer, frames, uvCoordinates } = e.data;
+          resolve({ buffer, frames, uvCoordinates });
+        };
+        worker.onerror = reject;
+        
+        // Send bitmaps to worker
+        worker.postMessage({
+          frameBitmaps,
+          width,
+          height,
+          scale
+        }, frameBitmaps.map(b => b));  // Transfer bitmap ownership
+      });
+      
+      // Create texture from received buffer
+      const blob = new Blob([atlasData.buffer]);
+      const imageUrl = URL.createObjectURL(blob);
+      const atlas = new BABYLON.Texture(imageUrl, this.scene);
+      
+      // Store frame data
+      this.frames = atlasData.frames;
+      this.uvCoordinates = atlasData.uvCoordinates;
+      
+      // Cleanup
+      URL.revokeObjectURL(imageUrl);
+      worker.terminate();
+      
+      return atlas;
+    } catch (error) {
+      console.error('Error in worker-based atlas creation:', error);
+      throw error;
+    }
   }
 }
 
