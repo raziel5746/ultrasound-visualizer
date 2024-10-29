@@ -871,19 +871,37 @@ const UltrasoundVisualizer = ({
               title="Choose New File"
             />
             
-            {/* Centered filename */}
+            {/* Centered filename - updated for scrolling */}
             <div style={{
               flex: 1,
-              textAlign: 'center',
-              color: 'white',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              padding: '0 45px',
+              position: 'relative',
+              margin: '0 45px', // Space for icons on both sides
+              overflow: 'hidden', // Hide overflow for child scroll
             }}>
-              {displayFileName}
+              <div style={{
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                whiteSpace: 'nowrap',
+                textAlign: 'center',
+                color: 'white',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                paddingBottom: '6px', // Space for scrollbar
+                // Hide scrollbar but keep functionality
+                msOverflowStyle: 'none', // IE and Edge
+                scrollbarWidth: 'none', // Firefox
+                // Custom scrollbar for webkit browsers
+                WebkitOverflowScrolling: 'touch',
+              }}>
+                {/* Actual filename text */}
+                <div style={{
+                  display: 'inline-block', // Keep text in one line
+                  paddingLeft: '20px',
+                  paddingRight: '20px',
+                }}>
+                  {displayFileName}
+                </div>
+              </div>
             </div>
 
             {/* HD/SD Toggle Button - moved to top right */}
@@ -1102,16 +1120,19 @@ const UltrasoundVisualizer = ({
                     style={{ cursor: 'pointer', color: 'white' }} 
                     onClick={resetCamera}
                     title="Reset Camera"
+                    size={24}  // Added size prop
                   />
                   <FaExchangeAlt 
                     style={{ cursor: 'pointer', color: isFrameOrderInverted ? '#3498db' : 'white' }} 
                     onClick={toggleFrameOrderInversion}
                     title="Invert Frame Order"
+                    size={24}  // Added size prop
                   />
                   <FaRedo
                     style={{ cursor: 'pointer', color: 'white' }}
                     onClick={resetToDefaults}
                     title="Reset to Defaults"
+                    size={24}  // Added size prop
                   />
                   {/* Add B&W toggle */}
                   <FaRecordVinyl
@@ -1129,6 +1150,7 @@ const UltrasoundVisualizer = ({
                       handleTextureFilterChange(newFilters);
                     }}
                     title="Toggle B&W"
+                    size={24}  // Added size prop
                   />
                   {/* Add Invert Colors toggle */}
                   <FaYinYang
@@ -1146,6 +1168,7 @@ const UltrasoundVisualizer = ({
                       handleTextureFilterChange(newFilters);
                     }}
                     title="Invert Colors"
+                    size={24}  // Added size prop
                   />
                 </div>
 
