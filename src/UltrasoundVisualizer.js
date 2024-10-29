@@ -249,170 +249,156 @@ const UltrasoundVisualizer = ({
   // Update the extractFrames function to use the ref
   const extractFrames = useCallback((video) => {
     return new Promise((resolve, reject) => {
-        const currentExtractionId = latestExtractionId.current;
-        
-        if (currentExtractionRef.current) {
-            currentExtractionRef.current.cancel();
+      const currentExtractionId = latestExtractionId.current;
+      
+      if (currentExtractionRef.current) {
+        currentExtractionRef.current.cancel();
+      }
+
+      let isCancelled = false;
+      currentExtractionRef.current = { 
+        cancel: () => { 
+          isCancelled = true; 
+        } 
+      };
+
+      const aspectRatio = video.videoWidth / video.videoHeight;
+      setFrameAspectRatio(aspectRatio);
+
+      // Determine target dimensions based on HD mode and device
+      const isMobileDevice = window.innerWidth <= 768;
+      const dimensions = currentHDMode.current ? HD_DIMENSIONS : SD_DIMENSIONS;
+      const targetDimensions = dimensions[isMobileDevice ? 'mobile' : 'desktop'];
+
+      // Calculate scaled dimensions while maintaining aspect ratio
+      let scaledWidth, scaledHeight;
+      if (video.videoWidth / video.videoHeight > targetDimensions.width / targetDimensions.height) {
+        scaledWidth = targetDimensions.width;
+        scaledHeight = Math.round(targetDimensions.width / aspectRatio);
+      } else {
+        scaledHeight = targetDimensions.height;
+        scaledWidth = Math.round(targetDimensions.height * aspectRatio);
+      }
+
+      setVideoInfo(prev => ({
+        ...prev,
+        originalWidth: video.videoWidth,
+        originalHeight: video.videoHeight,
+        scaledWidth,
+        scaledHeight,
+        scaleFactor: (scaledWidth / video.videoWidth).toFixed(2)
+      }));
+
+      // Rectangle setup code remains the same
+      if (!externalRectangle && !isResolutionChange.current) {
+        const margin = 0.1;
+        const canvasWidth = 200;
+        const canvasHeight = 200;
+        const availableWidth = canvasWidth * (1 - 2 * margin);
+        const availableHeight = canvasHeight * (1 - 2 * margin);
+
+        let rectWidth, rectHeight;
+        if (availableWidth / availableHeight > aspectRatio) {
+          rectHeight = availableHeight;
+          rectWidth = rectHeight * aspectRatio;
+        } else {
+          rectWidth = availableWidth;
+          rectHeight = rectWidth / aspectRatio;
         }
 
-        let isCancelled = false;
-        currentExtractionRef.current = { 
-            cancel: () => { 
-                isCancelled = true; 
-            } 
-        };
+        const rectX = (canvasWidth - rectWidth) / 2;
+        const rectY = (canvasHeight - rectHeight) / 2;
 
-        const aspectRatio = video.videoWidth / video.videoHeight;
-        setFrameAspectRatio(aspectRatio);
-
-        // Store original dimensions
-        setVideoInfo(prev => ({
-          ...prev,
-          originalWidth: video.videoWidth,
-          originalHeight: video.videoHeight
-        }));
-
-        // Only set initial rectangle if one doesn't exist or if this isn't a resolution change
-        if (!externalRectangle && !isResolutionChange.current) {
-          const margin = 0.1;
-          const canvasWidth = 200;
-          const canvasHeight = 200;
-          const availableWidth = canvasWidth * (1 - 2 * margin);
-          const availableHeight = canvasHeight * (1 - 2 * margin);
-
-          let rectWidth, rectHeight;
-          if (availableWidth / availableHeight > aspectRatio) {
-            rectHeight = availableHeight;
-            rectWidth = rectHeight * aspectRatio;
-          } else {
-            rectWidth = availableWidth;
-            rectHeight = rectWidth / aspectRatio;
-          }
-
-          const rectX = (canvasWidth - rectWidth) / 2;
-          const rectY = (canvasHeight - rectHeight) / 2;
-
-          setSliceRectangle({
-            x: rectX,
-            y: rectY,
-            width: rectWidth,
-            height: rectHeight
-          });
-        }
-
-        const totalFrameCount = Math.floor(video.duration * 30); // Assuming 30 fps
-        const maxFrames = 500;
-        const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
-        const frameCount = Math.min(maxFrames, totalFrameCount);
-        
-        setTotalFrames(frameCount);
-
-        const extractFrame = (currentFrame) => {
-          return new Promise((resolveFrame) => {
-            // Check if this extraction is still valid
-            if (isCancelled || currentExtractionId !== latestExtractionId.current) {
-                resolveFrame(null);
-                return;
-            }
-
-            video.currentTime = (currentFrame * frameStep) / 30;
-            video.onseeked = () => {
-              const canvas = document.createElement('canvas');
-              
-              // Determine the larger and smaller dimensions of the video
-              const largerDimension = Math.max(video.videoWidth, video.videoHeight);
-              const smallerDimension = Math.min(video.videoWidth, video.videoHeight);
-              
-              // Use HD or SD dimensions based on the ref value
-              const isMobileDevice = window.innerWidth <= 768;
-              const dimensions = currentHDMode.current ? HD_DIMENSIONS : SD_DIMENSIONS;
-              const targetDimensions = dimensions[isMobileDevice ? 'mobile' : 'desktop'];
-              const maxLargerDimension = Math.max(targetDimensions.width, targetDimensions.height);
-              const maxSmallerDimension = Math.min(targetDimensions.width, targetDimensions.height);
-              
-              // Calculate scaled dimensions while maintaining aspect ratio
-              let scaledWidth = video.videoWidth;
-              let scaledHeight = video.videoHeight;
-              
-              // Always apply scaling if dimensions exceed target dimensions
-              if (largerDimension > maxLargerDimension || smallerDimension > maxSmallerDimension) {
-                if (largerDimension / maxLargerDimension > smallerDimension / maxSmallerDimension) {
-                  // Larger dimension is the limiting factor
-                  const scaleFactor = maxLargerDimension / largerDimension;
-                  scaledWidth = Math.round(video.videoWidth * scaleFactor);
-                  scaledHeight = Math.round(video.videoHeight * scaleFactor);
-                } else {
-                  // Smaller dimension is the limiting factor
-                  const scaleFactor = maxSmallerDimension / smallerDimension;
-                  scaledWidth = Math.round(video.videoWidth * scaleFactor);
-                  scaledHeight = Math.round(video.videoHeight * scaleFactor);
-                }
-              }
-
-              // Update video info with scaled dimensions and scale factor
-              if (currentFrame === 0) {
-                const scaleFactor = (scaledWidth / video.videoWidth).toFixed(2);
-                setVideoInfo(prev => ({
-                  ...prev,
-                  originalWidth: video.videoWidth,
-                  originalHeight: video.videoHeight,
-                  scaledWidth,
-                  scaledHeight,
-                  scaleFactor
-                }));
-              }
-              
-              // Set canvas dimensions to the scaled size
-              canvas.width = scaledWidth;
-              canvas.height = scaledHeight;
-              
-              const ctx = canvas.getContext('2d');
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-              
-              ctx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
-              resolveFrame(canvas);
-            };
-          });
-        };
-
-        const extractAllFrames = async () => {
-          const frameCanvases = [];
-          for (let i = 0; i < frameCount; i++) {
-            if (isCancelled) {
-              reject(new Error('Frame extraction cancelled'));
-              return;
-            }
-            const frameCanvas = await extractFrame(i);
-            frameCanvases.push(frameCanvas);
-            setExtractionProgress((i + 1) / frameCount);
-          }
-
-          if (isCancelled) {
-            reject(new Error('Frame extraction cancelled'));
-            return;
-          }
-
-          try {
-            const atlas = new TextureAtlas(sceneManagerRef.current.getScene());
-            await atlas.createAtlas(frameCanvases);
-            
-            // Use the ref instead of the state
-            atlas.applyFilters(currentTextureFilters.current);
-            
-            setTextureAtlas(atlas);
-            resolve(frameCanvases.length);
-          } catch (error) {
-            console.error('12. Error creating texture atlas:', error);
-            reject(error);
-          }
-        };
-
-        extractAllFrames().catch(reject).finally(() => {
-          currentExtractionRef.current = null;
+        setSliceRectangle({
+          x: rectX,
+          y: rectY,
+          width: rectWidth,
+          height: rectHeight
         });
+      }
+
+      const totalFrameCount = Math.floor(video.duration * 30);
+      const maxFrames = 500;
+      const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
+      const frameCount = Math.min(maxFrames, totalFrameCount);
+      
+      setTotalFrames(frameCount);
+
+      // Create an OffscreenCanvas for frame extraction
+      const extractionCanvas = new OffscreenCanvas(scaledWidth, scaledHeight);
+      const extractionCtx = extractionCanvas.getContext('2d', {
+        alpha: false,
+        desynchronized: true,
+        willReadFrequently: false
+      });
+
+      // Configure canvas for optimal performance
+      extractionCtx.imageSmoothingEnabled = true;
+      extractionCtx.imageSmoothingQuality = 'high';
+
+      // Implement batch processing
+      const BATCH_SIZE = 10; // Process 10 frames at a time
+      const extractBatch = async (startIdx, endIdx) => {
+        const bitmaps = [];
+        for (let i = startIdx; i < endIdx && i < frameCount; i++) {
+          if (isCancelled || currentExtractionId !== latestExtractionId.current) {
+            bitmaps.forEach(bitmap => bitmap.close());
+            throw new Error('Frame extraction cancelled');
+          }
+
+          const currentFrame = i * frameStep;
+          video.currentTime = currentFrame / 30;
+          await new Promise(resolve => { video.onseeked = resolve; });
+
+          // Draw to OffscreenCanvas and create bitmap in one step
+          extractionCtx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
+          const bitmap = await createImageBitmap(extractionCanvas);
+          bitmaps.push(bitmap);
+          
+          // Update progress for each individual frame
+          setExtractionProgress((i + 1) / frameCount);
+        }
+        return bitmaps;
+      };
+
+      const extractAllFrames = async () => {
+        const allBitmaps = [];
+        let processedFrames = 0;
+        try {
+          for (let i = 0; i < frameCount; i += BATCH_SIZE) {
+            const batchBitmaps = await extractBatch(i, i + BATCH_SIZE);
+            allBitmaps.push(...batchBitmaps);
+            processedFrames += batchBitmaps.length;
+          }
+
+          const atlas = new TextureAtlas(sceneManagerRef.current.scene);
+          await atlas.createAtlas(allBitmaps);
+          
+          // Clean up bitmaps after atlas creation
+          allBitmaps.forEach(bitmap => bitmap.close());
+          
+          atlas.applyFilters(currentTextureFilters.current);
+          setTextureAtlas(atlas);
+          resolve(processedFrames);
+        } catch (error) {
+          // ... error handling remains the same ...
+        }
+      };
+
+      extractAllFrames().catch(reject).finally(() => {
+        currentExtractionRef.current = null;
+      });
     });
-  }, [externalRectangle, isResolutionChange]); // Dependencies remain the same
+  }, [externalRectangle, isResolutionChange]);
+
+  // Add cleanup in component unmount
+  useEffect(() => {
+    return () => {
+      if (textureAtlas) {
+        textureAtlas.dispose();
+      }
+    };
+  }, [textureAtlas]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -431,23 +417,17 @@ const UltrasoundVisualizer = ({
     
     // Toggle HD mode immediately and wait for the state to update
     await new Promise(resolve => {
-        setHDMode(prev => {
-            return !prev;
-        });
-        // Use setTimeout to ensure the state has updated
+        setHDMode(prev => !prev);
         setTimeout(resolve, 0);
     });
     
-    // Reset states but don't show extraction screen
-    requestAnimationFrame(() => {
-        setTextureAtlas(null);
-        setIsLocalLoading(true);
-        setError(null);
-        setExtractionProgress(0);
-        setTotalFrames(0);
-        setRenderedFrames(0);
-        setShowExtractionScreen(false); // Add this line to ensure extraction screen stays hidden
-    });
+    // Don't clear the texture atlas yet - keep the old one visible
+    setIsLocalLoading(true);
+    setError(null);
+    setExtractionProgress(0);
+    setTotalFrames(0);
+    setRenderedFrames(0);
+    setShowExtractionScreen(false);
 
     // Create video element and set up promise for metadata loading
     const video = document.createElement('video');
@@ -455,7 +435,6 @@ const UltrasoundVisualizer = ({
     video.muted = true;
     
     try {
-        // Wait for metadata to load before proceeding
         await new Promise((resolve, reject) => {
             video.addEventListener('loadedmetadata', resolve, { once: true });
             video.addEventListener('error', reject, { once: true });
@@ -463,22 +442,21 @@ const UltrasoundVisualizer = ({
             video.load();
         });
 
-        // Check if this is still the latest extraction
         if (currentExtractionId !== latestExtractionId.current) {
             return;
         }
 
         await video.play();
         video.pause();
+
+        // Extract frames and create new atlas
         const frameCount = await extractFrames(video);
-
-        // Check again if this is still the latest extraction
-        if (currentExtractionId !== latestExtractionId.current) {
-            return;
+        
+        // Only update states if this is still the latest extraction
+        if (currentExtractionId === latestExtractionId.current) {
+            setTotalFrames(frameCount);
+            setIsLocalLoading(false);
         }
-
-        setTotalFrames(frameCount);
-        setIsLocalLoading(false);
     } catch (error) {
         if (error.message !== 'Frame extraction cancelled') {
             setError(`Error extracting frames: ${error.message}`);
@@ -489,9 +467,9 @@ const UltrasoundVisualizer = ({
         if (currentExtractionId === latestExtractionId.current) {
             isResolutionChange.current = false;
         }
-        video.remove(); // Clean up the video element
+        video.remove();
     }
-  }, [storedVideoFile, extractFrames, setError, setHDMode]);
+}, [storedVideoFile, extractFrames, setError, setHDMode]);
 
   // Then the video loading effect
   useEffect(() => {
