@@ -830,6 +830,17 @@ const UltrasoundVisualizer = ({
     });
   }, []);
 
+  const [showCentralInfo, setShowCentralInfo] = useState(window.innerWidth >= 1000);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setShowCentralInfo(window.innerWidth >= 1100);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
       <div style={{ flex: 1, position: 'relative', height: isMobile ? 'calc(100% - 50px)' : '100%' }}>
@@ -1042,49 +1053,98 @@ const UltrasoundVisualizer = ({
               </div>
             )}
 
-            {/* Central info section */}
-            <div style={{ 
-              color: 'white', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: isMobile ? 'space-between' : 'center', // Changed for mobile
-              marginBottom: isMobile ? '15px' : '0',
-              width: isMobile ? '100%' : 'auto', // Added width for mobile
-              gap: isMobile ? '10px' : '20px' // Reduced gap for mobile
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <FaImages style={{ marginRight: '8px' }} />
-                <span>{renderedFrames}</span>
-              </div>
-
-              {videoInfo.originalWidth > 0 && (
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: isMobile ? '10px' : '15px', // Reduced gap for mobile
-                  fontSize: '14px',
-                  color: '#a0aec0'
-                }}>
-                  <div title="Original Resolution">
-                    {videoInfo.originalWidth}×{videoInfo.originalHeight}
-                  </div>
-                  <div style={{ color: '#3498db' }} title="Scaling Factor">
-                    →{videoInfo.scaleFactor}×
-                  </div>
-                  <div title="Scaled Resolution">
-                    {videoInfo.scaledWidth}×{videoInfo.scaledHeight}
-                  </div>
-                </div>
-              )}
-
-              <div style={{
-                color: '#3498db',
-                fontSize: '14px',
-                fontWeight: 'bold',
+            {/* Central info section - updated to hide based on screen width */}
+            {showCentralInfo && (
+              <div style={{ 
+                color: 'white', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                gap: '20px',
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
               }}>
-                {targetFps} FPS
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <FaImages style={{ marginRight: '8px' }} />
+                  <span>{renderedFrames}</span>
+                </div>
+
+                {videoInfo.originalWidth > 0 && (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '15px',
+                    fontSize: '14px',
+                    color: '#a0aec0'
+                  }}>
+                    <div title="Original Resolution">
+                      {videoInfo.originalWidth}×{videoInfo.originalHeight}
+                    </div>
+                    <div style={{ color: '#3498db' }} title="Scaling Factor">
+                      →{videoInfo.scaleFactor}×
+                    </div>
+                    <div title="Scaled Resolution">
+                      {videoInfo.scaledWidth}×{videoInfo.scaledHeight}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{
+                  color: '#3498db',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}>
+                  {targetFps} FPS
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Mobile version of central info - shown only on mobile */}
+            {isMobile && (
+              <div style={{ 
+                color: 'white', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                marginBottom: '15px',
+                width: '100%',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <FaImages style={{ marginRight: '8px' }} />
+                  <span>{renderedFrames}</span>
+                </div>
+
+                {videoInfo.originalWidth > 0 && (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '10px',
+                    fontSize: '14px',
+                    color: '#a0aec0'
+                  }}>
+                    <div title="Original Resolution">
+                      {videoInfo.originalWidth}×{videoInfo.originalHeight}
+                    </div>
+                    <div style={{ color: '#3498db' }} title="Scaling Factor">
+                      →{videoInfo.scaleFactor}×
+                    </div>
+                    <div title="Scaled Resolution">
+                      {videoInfo.scaledWidth}×{videoInfo.scaledHeight}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{
+                  color: '#3498db',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}>
+                  {targetFps} FPS
+                </div>
+              </div>
+            )}
 
             {/* Desktop layout - Color palette and camera mode on the right */}
             {!isMobile && (
