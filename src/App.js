@@ -1,6 +1,7 @@
-import React, { useState, useRef, useCallback, Suspense } from 'react';
+import React, { useState, useRef, useCallback, Suspense, useEffect } from 'react';
 import './App.css';
 import { FaFileUpload } from 'react-icons/fa';
+import ConversionPrompt from './components/ConversionPrompt';
 
 const UltrasoundVisualizer = React.lazy(() => import('./UltrasoundVisualizer'));
 
@@ -9,6 +10,9 @@ function App() {
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState(null);
   const fileInputRef = useRef(null);
+  const [isRotationLocked, setIsRotationLocked] = useState(false);
+  const [showConversionPrompt, setShowConversionPrompt] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -18,6 +22,10 @@ function App() {
         URL.revokeObjectURL(videoUrl);
       }
       
+      // Store the file for potential conversion
+      setPendingFile(file);
+      setError(null);
+      
       // Create new URL and set it
       const newUrl = URL.createObjectURL(file);
       setVideoUrl(newUrl);
@@ -25,12 +33,73 @@ function App() {
     }
   };
 
+  const handleError = useCallback((errorMessage) => {
+    // Check if it's an unsupported format error
+    if (errorMessage && errorMessage.includes('not supported') && pendingFile) {
+      setShowConversionPrompt(true);
+    } else {
+      setError(errorMessage);
+    }
+  }, [pendingFile]);
+
+  const handleConversionComplete = useCallback((convertedBlob) => {
+    setShowConversionPrompt(false);
+    
+    // Revoke old URL
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl);
+    }
+    
+    // Create new URL from converted blob
+    const newUrl = URL.createObjectURL(convertedBlob);
+    setVideoUrl(newUrl);
+    setError(null);
+  }, [videoUrl]);
+
+  const handleConversionCancel = useCallback(() => {
+    setShowConversionPrompt(false);
+    setError('Video format not supported. Please convert to H.264/MP4 format.');
+  }, []);
+
   const handleChooseFile = useCallback(() => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     } else {
       console.error('File input reference is null');
     }
+  }, []);
+
+  const handleRotationLockChange = async (locked) => {
+    try {
+      if (locked) {
+        // Lock to current orientation
+        await window.screen.orientation.lock(window.screen.orientation.type);
+      } else {
+        // Unlock orientation
+        await window.screen.orientation.unlock();
+      }
+      setIsRotationLocked(locked);
+    } catch (err) {
+      console.warn('Screen Orientation API not supported:', err);
+    }
+  };
+
+  useEffect(() => {
+    const checkOrientationSupport = async () => {
+      try {
+        if (!window.screen.orientation) {
+          console.warn('Screen Orientation API not supported');
+          return;
+        }
+        // Get initial lock state (if any)
+        const isLocked = window.screen.orientation.type.includes('locked');
+        setIsRotationLocked(isLocked);
+      } catch (err) {
+        console.warn('Error checking orientation support:', err);
+      }
+    };
+
+    checkOrientationSupport();
   }, []);
 
   return (
@@ -59,12 +128,22 @@ function App() {
               <UltrasoundVisualizer
                 videoUrl={videoUrl}
                 fileName={fileName}
-                setError={setError}
+                setError={handleError}
                 onFileSelect={handleChooseFile}
                 setVideoUrl={setVideoUrl}
+                isRotationLocked={isRotationLocked}
+                onRotationLockChange={handleRotationLockChange}
               />
             </Suspense>
           </>
+        )}
+        
+        {showConversionPrompt && pendingFile && (
+          <ConversionPrompt
+            file={pendingFile}
+            onConversionComplete={handleConversionComplete}
+            onCancel={handleConversionCancel}
+          />
         )}
       </main>
     </div>

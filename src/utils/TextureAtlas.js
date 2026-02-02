@@ -1,7 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
+import { TEXTURE_ATLAS, UI } from './constants';
 
 class TextureAtlas {
-  constructor(scene, maxSize = 8192) {
+  constructor(scene, maxSize = TEXTURE_ATLAS.MAX_SIZE_DESKTOP) {
     this.scene = scene;
     
     // Get the GPU's maximum texture size with fallback
@@ -10,20 +11,20 @@ class TextureAtlas {
       const gl = scene.getEngine()._gl;
       maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
       
-      // Some devices report unrealistic values, cap it at 16384
-      maxTextureSize = Math.min(maxTextureSize, 16384);
+      // Some devices report unrealistic values, cap it
+      maxTextureSize = Math.min(maxTextureSize, TEXTURE_ATLAS.MAX_GPU_TEXTURE_SIZE);
     } catch (error) {
       console.warn('Could not detect maximum texture size:', error);
-      maxTextureSize = 4096; // Conservative fallback
+      maxTextureSize = TEXTURE_ATLAS.FALLBACK_SIZE;
     }
     
     // Set maxSize based on device and GPU capabilities
-    const isMobile = window.innerWidth <= 768;
-    const defaultMaxSize = isMobile ? 4096 : 8192;
+    const isMobile = window.innerWidth <= UI.MOBILE_BREAKPOINT;
+    const defaultMaxSize = isMobile ? TEXTURE_ATLAS.MAX_SIZE_MOBILE : TEXTURE_ATLAS.MAX_SIZE_DESKTOP;
     this.maxSize = Math.min(maxTextureSize, defaultMaxSize, maxSize);
     
     // If the texture size is very small, warn the user
-    if (this.maxSize < 2048) {
+    if (this.maxSize < TEXTURE_ATLAS.MIN_WARN_SIZE) {
       console.warn(`Limited texture size detected: ${this.maxSize}px. Performance may be affected.`);
     }
     
@@ -136,46 +137,6 @@ class TextureAtlas {
     }
 
     return { success: true };
-  }
-
-  packFrames(frameBitmaps, ctx, width, height, scale) {
-    let x = 0;
-    let y = 0;
-    let rowHeight = 0;
-
-    this.frames = [];
-    this.uvCoordinates = [];
-
-    for (let i = 0; i < frameBitmaps.length; i++) {
-      const bitmap = frameBitmaps[i];
-      const scaledWidth = Math.floor(bitmap.width * scale);
-      const scaledHeight = Math.floor(bitmap.height * scale);
-
-      if (x + scaledWidth > width) {
-        x = 0;
-        y += rowHeight;
-        rowHeight = 0;
-      }
-
-      ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height, x, y, scaledWidth, scaledHeight);
-
-      this.frames.push({
-        x,
-        y,
-        width: scaledWidth,
-        height: scaledHeight
-      });
-
-      this.uvCoordinates.push({
-        x: x / width,
-        y: y / height,
-        width: scaledWidth / width,
-        height: scaledHeight / height
-      });
-
-      x += scaledWidth;
-      rowHeight = Math.max(rowHeight, scaledHeight);
-    }
   }
 
   calculateOptimalAtlasSize(frameBitmaps, scale = 1) {

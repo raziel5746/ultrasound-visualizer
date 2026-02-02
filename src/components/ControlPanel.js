@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaLock, FaLockOpen } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
@@ -111,7 +111,7 @@ const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
       display: 'flex', 
       alignItems: 'center', 
       marginBottom: '5px',
-      fontSize: isMobile ? '14px' : '16px' // Updated to 16px for desktop
+      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
     }}>
       <FaImages style={{ marginRight: '10px' }} />
       {label}:
@@ -182,7 +182,7 @@ const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
       display: 'flex', 
       justifyContent: 'space-between', 
       marginTop: '5px',
-      fontSize: isMobile ? '14px' : '16px' // Updated to 16px for desktop
+      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
     }}>
       <span>{values[0].toFixed(0)}%</span>
       <span>{values[1].toFixed(0)}%</span>
@@ -238,6 +238,8 @@ const ControlPanel = ({
   textureFilters, 
   setTextureFilters,
   onTextureFilterChange,
+  onRotationLockChange,
+  isRotationLocked,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -271,7 +273,7 @@ const ControlPanel = ({
   return (
     <div style={{
       width: isMobile ? '100%' : '320px',
-      height: isMobile ? (isOpen ? '340px' : '0') : '100%', // Default height
+      height: isMobile ? (isOpen ? '340px' : '0') : '100%',
       padding: isMobile ? (isOpen ? '15px 10px' : '0') : '25px 20px',
       backgroundColor: '#1a1a1a',
       overflowY: 'auto',
@@ -289,6 +291,32 @@ const ControlPanel = ({
     }}>
       {(!isMobile || isOpen) && (
         <>
+          {isMobile && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '0 15px 15px',
+              borderBottom: '1px solid #404040'
+            }}>
+              <div
+                onClick={() => onRotationLockChange(!isRotationLocked)}
+                style={{
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  backgroundColor: isRotationLocked ? '#3498db33' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px'
+                }}
+              >
+                {isRotationLocked ? <FaLock /> : <FaLockOpen />}
+                <span>Rotation {isRotationLocked ? 'Locked' : 'Unlocked'}</span>
+              </div>
+            </div>
+          )}
+          
           {!isMobile && (
             <h3 style={{ 
               margin: 0, 

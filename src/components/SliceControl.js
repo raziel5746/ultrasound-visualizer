@@ -362,98 +362,79 @@ const SliceControl = ({
     guideRect: getFrameGuideRect()
   }), [externalRectangle, getHandles, getFrameGuideRect]);
 
-  // Modify the draw effect to use memoized values
+  // Draw function - only called when state changes, not continuously
   useEffect(() => {
-    let animationFrameId;
-    let isDrawing = false;
+    if (!canvasRef.current) return;
     
-    const draw = () => {
-      if (!canvasRef.current || isDrawing) return;
-      isDrawing = true;
-      
-      const ctx = canvasRef.current.getContext('2d');
-      ctx.clearRect(0, 0, width, height);
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.clearRect(0, 0, width, height);
 
-      // Draw background grid (reduce frequency of grid updates)
-      if (!isDragging && !isDrawing) {
-        ctx.strokeStyle = '#444';
-        ctx.lineWidth = 0.5;
-        for (let i = 0; i <= width; i += 20) {
-          ctx.beginPath();
-          ctx.moveTo(i, 0);
-          ctx.lineTo(i, height);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(0, i);
-          ctx.lineTo(width, i);
-          ctx.stroke();
-        }
+    // Draw background grid only when not actively interacting
+    if (!isDragging && !isDrawing) {
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= width; i += 20) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(width, i);
+        ctx.stroke();
       }
+    }
 
-      // Draw frame guide rectangle
-      const { guideRect } = rectangleState;
-      ctx.strokeStyle = '#666';
+    // Draw frame guide rectangle
+    const { guideRect } = rectangleState;
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(guideRect.x, guideRect.y, guideRect.width, guideRect.height);
+
+    // Add frame guide label
+    ctx.fillStyle = '#666';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Frame Bounds', width / 2, guideRect.y - 5);
+
+    // Draw user's rectangle if it exists
+    if (rectangleState.rectangle) {
+      ctx.strokeStyle = '#3498db';
       ctx.lineWidth = 2;
-      ctx.strokeRect(guideRect.x, guideRect.y, guideRect.width, guideRect.height);
+      ctx.strokeRect(
+        rectangleState.rectangle.x,
+        rectangleState.rectangle.y,
+        rectangleState.rectangle.width,
+        rectangleState.rectangle.height
+      );
 
-      // Add frame guide label
-      ctx.fillStyle = '#666';
-      ctx.font = '12px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Frame Bounds', width / 2, guideRect.y - 5);
-
-      // Draw user's rectangle if it exists
-      if (rectangleState.rectangle) {
-        ctx.strokeStyle = '#3498db';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(
-          rectangleState.rectangle.x,
-          rectangleState.rectangle.y,
-          rectangleState.rectangle.width,
-          rectangleState.rectangle.height
-        );
-
-        // Draw handles
-        ctx.fillStyle = '#3498db';
-        // Draw all handles except center
-        rectangleState.handles.forEach(handle => {
-          if (handle.type !== 'center') {  // Skip center handle in the loop
-            ctx.beginPath();
-            ctx.arc(handle.x, handle.y, 5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        });
-
-        // Draw center handle last with outline
-        const centerHandle = rectangleState.handles.find(handle => handle.type === 'center');
-        if (centerHandle) {
-          // Draw white outline
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
+      // Draw handles
+      ctx.fillStyle = '#3498db';
+      // Draw all handles except center
+      rectangleState.handles.forEach(handle => {
+        if (handle.type !== 'center') {
           ctx.beginPath();
-          ctx.arc(centerHandle.x, centerHandle.y, 6, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // Fill center
-          ctx.fillStyle = '#3498db';
-          ctx.beginPath();
-          ctx.arc(centerHandle.x, centerHandle.y, 6, 0, Math.PI * 2);
+          ctx.arc(handle.x, handle.y, 5, 0, Math.PI * 2);
           ctx.fill();
         }
+      });
+
+      // Draw center handle last with outline
+      const centerHandle = rectangleState.handles.find(handle => handle.type === 'center');
+      if (centerHandle) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerHandle.x, centerHandle.y, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#3498db';
+        ctx.beginPath();
+        ctx.arc(centerHandle.x, centerHandle.y, 6, 0, Math.PI * 2);
+        ctx.fill();
       }
-
-      isDrawing = false;
-      animationFrameId = requestAnimationFrame(draw);
-    };
-
-    draw();
-
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, [rectangleState, width, height, isDragging]);
+    }
+  }, [rectangleState, width, height, isDragging, isDrawing]);
 
   // Add reset function
   const handleReset = useCallback(() => {

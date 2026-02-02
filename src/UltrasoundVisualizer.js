@@ -2,31 +2,27 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as BABYLON from '@babylonjs/core';
 import SceneManager from './scene/SceneManager';
 import ControlPanel from './components/ControlPanel';
-import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaCog, FaCube, FaYinYang, FaRecordVinyl } from 'react-icons/fa';
+import { FaImages, FaUndoAlt, FaExchangeAlt, FaFolderOpen, FaRedo, FaCube } from 'react-icons/fa';
+import FilterToggleIcons from './components/FilterToggleIcons';
+import LoadingScreen from './components/LoadingScreen';
+import MobileToggle from './components/MobileToggle';
 import TextureAtlas from './utils/TextureAtlas';
 import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
 import SliceControl from './components/SliceControl';
 import { ControlGroup } from './components/ControlPanel';
 import debounce from 'lodash/debounce';
-
-// Add these new constants for HD resolution
-const SD_DIMENSIONS = {
-  mobile: { width: 640, height: 480 },
-  desktop: { width: 1280, height: 720 }
-};
-
-const HD_DIMENSIONS = {
-  mobile: { width: 1280, height: 720 },
-  desktop: { width: 1920, height: 1080 }
-};
+import { SD_DIMENSIONS, HD_DIMENSIONS, VISUALIZATION, TARGET_FPS, UI, DEFAULT_VALUES } from './utils/constants';
 
 const UltrasoundVisualizer = ({ 
   videoUrl, 
   fileName, // This is the prop
   setError, 
   onFileSelect,
-  externalRectangle
+  externalRectangle,
+  setVideoUrl,
+  isRotationLocked,
+  onRotationLockChange
 }) => {
   // Add this ref near the other refs at the top
   const currentHDMode = useRef(false);
@@ -73,18 +69,17 @@ const UltrasoundVisualizer = ({
 
   // Update the defaultValues object to include all filter values
   const defaultValues = useMemo(() => ({
-    stackLength: 1.5,
-    framePercentage: 50,
-    opacity: 0.3,
-    brightness: 0.5,
+    stackLength: DEFAULT_VALUES.STACK_LENGTH,
+    framePercentage: DEFAULT_VALUES.FRAME_PERCENTAGE,
+    opacity: DEFAULT_VALUES.OPACITY,
+    brightness: DEFAULT_VALUES.BRIGHTNESS,
     blendMode: BABYLON.Constants.ALPHA_COMBINE,
-    sliceRange: [0, 100],
+    sliceRange: DEFAULT_VALUES.SLICE_RANGE,
     isFrameOrderInverted: false,
-    backgroundColor: '#000000',
-    globalLightIntensity: 2.5,
-    // Add these new default values
-    exposure: 1,
-    contrast: 1,
+    backgroundColor: DEFAULT_VALUES.BACKGROUND_COLOR,
+    globalLightIntensity: DEFAULT_VALUES.GLOBAL_LIGHT_INTENSITY,
+    exposure: DEFAULT_VALUES.EXPOSURE,
+    contrast: DEFAULT_VALUES.CONTRAST,
     textureFilters: {
       brightness: 1,
       contrast: 0,
@@ -266,7 +261,7 @@ const UltrasoundVisualizer = ({
       setFrameAspectRatio(aspectRatio);
 
       // Determine target dimensions based on HD mode and device
-      const isMobileDevice = window.innerWidth <= 768;
+      const isMobileDevice = window.innerWidth <= UI.MOBILE_BREAKPOINT;
       const dimensions = currentHDMode.current ? HD_DIMENSIONS : SD_DIMENSIONS;
       const targetDimensions = dimensions[isMobileDevice ? 'mobile' : 'desktop'];
 
@@ -317,8 +312,8 @@ const UltrasoundVisualizer = ({
         });
       }
 
-      const totalFrameCount = Math.floor(video.duration * 30);
-      const maxFrames = 500;
+      const totalFrameCount = Math.floor(video.duration * VISUALIZATION.FRAME_RATE);
+      const maxFrames = VISUALIZATION.MAX_FRAMES;
       const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
       const frameCount = Math.min(maxFrames, totalFrameCount);
       
@@ -337,7 +332,7 @@ const UltrasoundVisualizer = ({
       extractionCtx.imageSmoothingQuality = 'high';
 
       // Implement batch processing
-      const BATCH_SIZE = 10; // Process 10 frames at a time
+      const BATCH_SIZE = VISUALIZATION.BATCH_SIZE;
       const extractBatch = async (startIdx, endIdx) => {
         const bitmaps = [];
         for (let i = startIdx; i < endIdx && i < frameCount; i++) {
@@ -528,7 +523,27 @@ const UltrasoundVisualizer = ({
       };
 
       const handleVideoError = (e) => {
-        setError(`Error loading video: ${e.message}`);
+        const mediaError = e.target?.error;
+        let errorMessage = 'Unknown error';
+        if (mediaError) {
+          switch (mediaError.code) {
+            case MediaError.MEDIA_ERR_ABORTED:
+              errorMessage = 'Video loading was aborted';
+              break;
+            case MediaError.MEDIA_ERR_NETWORK:
+              errorMessage = 'Network error while loading video';
+              break;
+            case MediaError.MEDIA_ERR_DECODE:
+              errorMessage = 'Video decoding failed - file may be corrupted or unsupported codec';
+              break;
+            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+              errorMessage = 'Video format not supported';
+              break;
+            default:
+              errorMessage = mediaError.message || `Error code: ${mediaError.code}`;
+          }
+        }
+        setError(`Error loading video: ${errorMessage}`);
         setIsLocalLoading(false);
       };
 
@@ -675,9 +690,9 @@ const UltrasoundVisualizer = ({
 
   useEffect(() => {
     const handleResize = () => {
-      const isMobileDevice = window.innerWidth <= 768;
+      const isMobileDevice = window.innerWidth <= UI.MOBILE_BREAKPOINT;
       setIsMobile(isMobileDevice);
-      setTargetFps(isMobileDevice ? 30 : 60);
+      setTargetFps(isMobileDevice ? TARGET_FPS.mobile : TARGET_FPS.desktop);
 
       if (sceneManagerRef.current) {
         // Store camera state before resize
@@ -1014,41 +1029,12 @@ const UltrasoundVisualizer = ({
                   title="Reset to Defaults"
                   size={24}  // Increased from default size
                 />
-                {/* Add B&W toggle */}
-                <FaRecordVinyl
-                  style={{ 
-                    cursor: 'pointer', 
-                    color: textureFilters.isGrayscale ? '#3498db' : 'white',
-                    transition: 'color 0.2s ease'
-                  }}
-                  onClick={() => {
-                    const newFilters = { 
-                      ...textureFilters, 
-                      isGrayscale: !textureFilters.isGrayscale 
-                    };
+                <FilterToggleIcons
+                  textureFilters={textureFilters}
+                  onFilterChange={(newFilters) => {
                     setTextureFilters(newFilters);
                     handleTextureFilterChange(newFilters);
                   }}
-                  title="Toggle B&W"
-                  size={24}  // Increased from default size
-                />
-                {/* Add Invert Colors toggle */}
-                <FaYinYang
-                  style={{ 
-                    cursor: 'pointer', 
-                    color: textureFilters.isInverted ? '#3498db' : 'white',
-                    transition: 'color 0.2s ease'
-                  }}
-                  onClick={() => {
-                    const newFilters = { 
-                      ...textureFilters, 
-                      isInverted: !textureFilters.isInverted 
-                    };
-                    setTextureFilters(newFilters);
-                    handleTextureFilterChange(newFilters);
-                  }}
-                  title="Invert Colors"
-                  size={24}  // Increased from default size
                 />
               </div>
             )}
@@ -1148,7 +1134,7 @@ const UltrasoundVisualizer = ({
 
             {/* Desktop layout - Color palette and camera mode on the right */}
             {!isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}> {/* Added gap */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <ColorPalette
                   colors={backgroundColors}
                   selectedColor={backgroundColor}
@@ -1194,41 +1180,12 @@ const UltrasoundVisualizer = ({
                     title="Reset to Defaults"
                     size={24}  // Added size prop
                   />
-                  {/* Add B&W toggle */}
-                  <FaRecordVinyl
-                    style={{ 
-                      cursor: 'pointer', 
-                      color: textureFilters.isGrayscale ? '#3498db' : 'white',
-                      transition: 'color 0.2s ease'
-                    }}
-                    onClick={() => {
-                      const newFilters = { 
-                        ...textureFilters, 
-                        isGrayscale: !textureFilters.isGrayscale 
-                      };
+                  <FilterToggleIcons
+                    textureFilters={textureFilters}
+                    onFilterChange={(newFilters) => {
                       setTextureFilters(newFilters);
                       handleTextureFilterChange(newFilters);
                     }}
-                    title="Toggle B&W"
-                    size={24}  // Added size prop
-                  />
-                  {/* Add Invert Colors toggle */}
-                  <FaYinYang
-                    style={{ 
-                      cursor: 'pointer', 
-                      color: textureFilters.isInverted ? '#3498db' : 'white',
-                      transition: 'color 0.2s ease'
-                    }}
-                    onClick={() => {
-                      const newFilters = { 
-                        ...textureFilters, 
-                        isInverted: !textureFilters.isInverted 
-                      };
-                      setTextureFilters(newFilters);
-                      handleTextureFilterChange(newFilters);
-                    }}
-                    title="Invert Colors"
-                    size={24}  // Added size prop
                   />
                 </div>
 
@@ -1291,88 +1248,20 @@ const UltrasoundVisualizer = ({
           </div>
         </div>
 
-        {/* Loading screen remains the same */}
         {isLocalLoading && showExtractionScreen && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            color: 'white',
-            fontSize: '24px',
-            zIndex: 1000
-          }}>
-            <div style={{ marginBottom: '20px' }}>Extracting Frames</div>
-            <div style={{ 
-              width: '80%', 
-              height: '40px', 
-              backgroundColor: '#444',
-              borderRadius: '20px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                width: `${extractionProgress * 100}%`,
-                height: '100%',
-                backgroundColor: '#3498db',
-              }} />
-            </div>
-            <div style={{ marginTop: '10px' }}>
-              {Math.round(extractionProgress * 100)}% ({Math.round(extractionProgress * totalFrames)} / {totalFrames} frames)
-            </div>
-            
-            {/* Add resolution info */}
-            {videoInfo.originalWidth > 0 && (
-              <div style={{
-                marginTop: '20px',
-                fontSize: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                padding: '15px',
-                borderRadius: '10px',
-                gap: '5px'
-              }}>
-                <div>Original: {videoInfo.originalWidth}×{videoInfo.originalHeight}</div>
-                <div>Scaled: {videoInfo.scaledWidth}×{videoInfo.scaledHeight}</div>
-                <div>Scale factor: {videoInfo.scaleFactor}x</div>
-              </div>
-            )}
-          </div>
+          <LoadingScreen
+            extractionProgress={extractionProgress}
+            totalFrames={totalFrames}
+            videoInfo={videoInfo}
+          />
         )}
       </div>
 
-      {/* Mobile toggle and ControlPanel remain the same */}
       {isMobile && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: isControlPanelOpen ? '340px' : 0,
-            left: 0,
-            right: 0,
-            backgroundColor: '#282c34',
-            padding: '10px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            cursor: 'pointer',
-            boxShadow: '0 -2px 5px rgba(0,0,0,0.2)',
-            zIndex: 1001,
-            transition: 'bottom 0.2s ease-in-out',
-            color: '#ffffff',
-            borderTop: '1px solid #404040'
-          }}
-          onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
-        >
-          <FaCog style={{ marginRight: '10px', color: '#3498db' }} />
-          {isControlPanelOpen ? 'Hide Controls' : 'Show Controls'}
-        </div>
+        <MobileToggle
+          isOpen={isControlPanelOpen}
+          onToggle={() => setIsControlPanelOpen(!isControlPanelOpen)}
+        />
       )}
       <ControlPanel
         stackLength={stackLength}
@@ -1424,6 +1313,8 @@ const UltrasoundVisualizer = ({
         textureFilters={textureFilters}
         setTextureFilters={setTextureFilters}
         onTextureFilterChange={handleTextureFilterChange}
+        isRotationLocked={isRotationLocked}
+        onRotationLockChange={onRotationLockChange}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
