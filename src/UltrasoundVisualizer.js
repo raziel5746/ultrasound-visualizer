@@ -1151,7 +1151,7 @@ const UltrasoundVisualizer = ({
 
             {/* Desktop layout - Color palette and camera mode on the right */}
             {!isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }} {/* Added gap */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <ColorPalette
                   colors={backgroundColors}
                   selectedColor={backgroundColor}

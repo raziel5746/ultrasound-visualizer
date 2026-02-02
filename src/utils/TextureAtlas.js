@@ -138,46 +138,6 @@ class TextureAtlas {
     return { success: true };
   }
 
-  packFrames(frameBitmaps, ctx, width, height, scale) {
-    let x = 0;
-    let y = 0;
-    let rowHeight = 0;
-
-    this.frames = [];
-    this.uvCoordinates = [];
-
-    for (let i = 0; i < frameBitmaps.length; i++) {
-      const bitmap = frameBitmaps[i];
-      const scaledWidth = Math.floor(bitmap.width * scale);
-      const scaledHeight = Math.floor(bitmap.height * scale);
-
-      if (x + scaledWidth > width) {
-        x = 0;
-        y += rowHeight;
-        rowHeight = 0;
-      }
-
-      ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height, x, y, scaledWidth, scaledHeight);
-
-      this.frames.push({
-        x,
-        y,
-        width: scaledWidth,
-        height: scaledHeight
-      });
-
-      this.uvCoordinates.push({
-        x: x / width,
-        y: y / height,
-        width: scaledWidth / width,
-        height: scaledHeight / height
-      });
-
-      x += scaledWidth;
-      rowHeight = Math.max(rowHeight, scaledHeight);
-    }
-  }
-
   calculateOptimalAtlasSize(frameBitmaps, scale = 1) {
     let totalArea = 0;
     let maxWidth = 0;
