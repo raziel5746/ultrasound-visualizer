@@ -1,10 +1,11 @@
 import * as BABYLON from '@babylonjs/core';
+import { CAMERA } from '../utils/constants';
 
 class SceneManager {
   constructor(canvas) {
     this.canvas = canvas;
     this.scene = null;
-    this.camera = null;  // Keep the main camera reference
+    this.camera = null;
     this.engine = null;
     this.frameMeshes = [];
     this.light = null;
@@ -14,13 +15,13 @@ class SceneManager {
     this.postProcesses = {};
     this.frameWidth = null;
     this.frameHeight = null;
-    // Add these for orthographic support
+    // Orthographic camera support
     this.perspectiveCamera = null;
     this.orthographicCamera = null;
     this.currentCamera = null;
-    this.orthoZoomSensitivity = 0.03; // Fixed value instead of default
-    this.orthoPanSensitivity = 150; // Update this line
-    this.orthoExponent = 0.3; // This is already correct
+    this.orthoZoomSensitivity = 0.03;
+    this.orthoPanSensitivity = 150;
+    this.orthoExponent = 0.3;
   }
 
   initialize() {
@@ -32,7 +33,7 @@ class SceneManager {
       "camera",
       -Math.PI / 4,
       Math.PI / 3,
-      75,
+      CAMERA.DEFAULT_RADIUS,
       BABYLON.Vector3.Zero(),
       this.scene
     );
@@ -41,19 +42,18 @@ class SceneManager {
     this.perspectiveCamera = this.camera;
     
     // Create orthographic camera
-    const orthoRadius = 75;
     this.orthographicCamera = new BABYLON.ArcRotateCamera(
       'orthoCamera',
       -Math.PI / 4,
       Math.PI / 3,
-      orthoRadius,
+      CAMERA.DEFAULT_RADIUS,
       BABYLON.Vector3.Zero(),
       this.scene
     );
     
     // Set perspective camera limits first
-    this.camera.lowerRadiusLimit = 10;
-    this.camera.upperRadiusLimit = 150;
+    this.camera.lowerRadiusLimit = CAMERA.LOWER_RADIUS_LIMIT;
+    this.camera.upperRadiusLimit = CAMERA.UPPER_RADIUS_LIMIT;
 
     // Set up orthographic mode with calculated limits
     const aspectRatio = this.canvas.width / this.canvas.height;
@@ -75,15 +75,15 @@ class SceneManager {
     this.camera.attachControl(this.canvas, true);
 
     // Configure camera settings
-    this.camera.inertia = 0.5;
-    this.camera.angularSensibilityX = 300;
-    this.camera.angularSensibilityY = 300;
-    this.camera.panningSensibility = 200;
-    this.camera.wheelPrecision = 2;
+    this.camera.inertia = CAMERA.INERTIA;
+    this.camera.angularSensibilityX = CAMERA.ANGULAR_SENSIBILITY_X;
+    this.camera.angularSensibilityY = CAMERA.ANGULAR_SENSIBILITY_Y;
+    this.camera.panningSensibility = CAMERA.PANNING_SENSIBILITY;
+    this.camera.wheelPrecision = CAMERA.WHEEL_PRECISION;
     this.camera.lowerBetaLimit = 0.01;
     this.camera.upperBetaLimit = Math.PI - 0.01;
-    this.camera.lowerRadiusLimit = 10;
-    this.camera.upperRadiusLimit = 150;
+    this.camera.lowerRadiusLimit = CAMERA.LOWER_RADIUS_LIMIT;
+    this.camera.upperRadiusLimit = CAMERA.UPPER_RADIUS_LIMIT;
 
     // Configure orthographic camera with adjusted panning
     this.orthographicCamera.inertia = this.camera.inertia;

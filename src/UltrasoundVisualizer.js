@@ -9,17 +9,7 @@ import { ColorMaps } from './utils/ColorMaps';
 import SliceControl from './components/SliceControl';
 import { ControlGroup } from './components/ControlPanel';
 import debounce from 'lodash/debounce';
-
-// Add these new constants for HD resolution
-const SD_DIMENSIONS = {
-  mobile: { width: 640, height: 480 },
-  desktop: { width: 1280, height: 720 }
-};
-
-const HD_DIMENSIONS = {
-  mobile: { width: 1280, height: 720 },
-  desktop: { width: 1920, height: 1080 }
-};
+import { SD_DIMENSIONS, HD_DIMENSIONS, VISUALIZATION, TARGET_FPS, UI, DEFAULT_VALUES } from './utils/constants';
 
 const UltrasoundVisualizer = ({ 
   videoUrl, 
@@ -76,18 +66,17 @@ const UltrasoundVisualizer = ({
 
   // Update the defaultValues object to include all filter values
   const defaultValues = useMemo(() => ({
-    stackLength: 1.5,
-    framePercentage: 50,
-    opacity: 0.3,
-    brightness: 0.5,
+    stackLength: DEFAULT_VALUES.STACK_LENGTH,
+    framePercentage: DEFAULT_VALUES.FRAME_PERCENTAGE,
+    opacity: DEFAULT_VALUES.OPACITY,
+    brightness: DEFAULT_VALUES.BRIGHTNESS,
     blendMode: BABYLON.Constants.ALPHA_COMBINE,
-    sliceRange: [0, 100],
+    sliceRange: DEFAULT_VALUES.SLICE_RANGE,
     isFrameOrderInverted: false,
-    backgroundColor: '#000000',
-    globalLightIntensity: 2.5,
-    // Add these new default values
-    exposure: 1,
-    contrast: 1,
+    backgroundColor: DEFAULT_VALUES.BACKGROUND_COLOR,
+    globalLightIntensity: DEFAULT_VALUES.GLOBAL_LIGHT_INTENSITY,
+    exposure: DEFAULT_VALUES.EXPOSURE,
+    contrast: DEFAULT_VALUES.CONTRAST,
     textureFilters: {
       brightness: 1,
       contrast: 0,
@@ -269,7 +258,7 @@ const UltrasoundVisualizer = ({
       setFrameAspectRatio(aspectRatio);
 
       // Determine target dimensions based on HD mode and device
-      const isMobileDevice = window.innerWidth <= 768;
+      const isMobileDevice = window.innerWidth <= UI.MOBILE_BREAKPOINT;
       const dimensions = currentHDMode.current ? HD_DIMENSIONS : SD_DIMENSIONS;
       const targetDimensions = dimensions[isMobileDevice ? 'mobile' : 'desktop'];
 
@@ -320,8 +309,8 @@ const UltrasoundVisualizer = ({
         });
       }
 
-      const totalFrameCount = Math.floor(video.duration * 30);
-      const maxFrames = 500;
+      const totalFrameCount = Math.floor(video.duration * VISUALIZATION.FRAME_RATE);
+      const maxFrames = VISUALIZATION.MAX_FRAMES;
       const frameStep = Math.max(1, Math.floor(totalFrameCount / maxFrames));
       const frameCount = Math.min(maxFrames, totalFrameCount);
       
@@ -340,7 +329,7 @@ const UltrasoundVisualizer = ({
       extractionCtx.imageSmoothingQuality = 'high';
 
       // Implement batch processing
-      const BATCH_SIZE = 10; // Process 10 frames at a time
+      const BATCH_SIZE = VISUALIZATION.BATCH_SIZE;
       const extractBatch = async (startIdx, endIdx) => {
         const bitmaps = [];
         for (let i = startIdx; i < endIdx && i < frameCount; i++) {
@@ -678,9 +667,9 @@ const UltrasoundVisualizer = ({
 
   useEffect(() => {
     const handleResize = () => {
-      const isMobileDevice = window.innerWidth <= 768;
+      const isMobileDevice = window.innerWidth <= UI.MOBILE_BREAKPOINT;
       setIsMobile(isMobileDevice);
-      setTargetFps(isMobileDevice ? 30 : 60);
+      setTargetFps(isMobileDevice ? TARGET_FPS.mobile : TARGET_FPS.desktop);
 
       if (sceneManagerRef.current) {
         // Store camera state before resize
