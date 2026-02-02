@@ -26,7 +26,10 @@ const UltrasoundVisualizer = ({
   fileName, // This is the prop
   setError, 
   onFileSelect,
-  externalRectangle
+  externalRectangle,
+  setVideoUrl,
+  isRotationLocked,
+  onRotationLockChange
 }) => {
   // Add this ref near the other refs at the top
   const currentHDMode = useRef(false);
@@ -1148,7 +1151,7 @@ const UltrasoundVisualizer = ({
 
             {/* Desktop layout - Color palette and camera mode on the right */}
             {!isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}> {/* Added gap */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }} {/* Added gap */}
                 <ColorPalette
                   colors={backgroundColors}
                   selectedColor={backgroundColor}
@@ -1424,6 +1427,8 @@ const UltrasoundVisualizer = ({
         textureFilters={textureFilters}
         setTextureFilters={setTextureFilters}
         onTextureFilterChange={handleTextureFilterChange}
+        isRotationLocked={isRotationLocked}
+        onRotationLockChange={onRotationLockChange}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

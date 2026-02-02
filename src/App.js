@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, Suspense } from 'react';
+import React, { useState, useRef, useCallback, Suspense, useEffect } from 'react';
 import './App.css';
 import { FaFileUpload } from 'react-icons/fa';
 
@@ -9,6 +9,7 @@ function App() {
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState(null);
   const fileInputRef = useRef(null);
+  const [isRotationLocked, setIsRotationLocked] = useState(false);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -31,6 +32,39 @@ function App() {
     } else {
       console.error('File input reference is null');
     }
+  }, []);
+
+  const handleRotationLockChange = async (locked) => {
+    try {
+      if (locked) {
+        // Lock to current orientation
+        await screen.orientation.lock(screen.orientation.type);
+      } else {
+        // Unlock orientation
+        await screen.orientation.unlock();
+      }
+      setIsRotationLocked(locked);
+    } catch (err) {
+      console.warn('Screen Orientation API not supported:', err);
+    }
+  };
+
+  useEffect(() => {
+    const checkOrientationSupport = async () => {
+      try {
+        if (!screen.orientation) {
+          console.warn('Screen Orientation API not supported');
+          return;
+        }
+        // Get initial lock state (if any)
+        const isLocked = screen.orientation.type.includes('locked');
+        setIsRotationLocked(isLocked);
+      } catch (err) {
+        console.warn('Error checking orientation support:', err);
+      }
+    };
+
+    checkOrientationSupport();
   }, []);
 
   return (
@@ -62,6 +96,8 @@ function App() {
                 setError={setError}
                 onFileSelect={handleChooseFile}
                 setVideoUrl={setVideoUrl}
+                isRotationLocked={isRotationLocked}
+                onRotationLockChange={handleRotationLockChange}
               />
             </Suspense>
           </>
