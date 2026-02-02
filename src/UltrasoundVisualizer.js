@@ -523,7 +523,27 @@ const UltrasoundVisualizer = ({
       };
 
       const handleVideoError = (e) => {
-        setError(`Error loading video: ${e.message}`);
+        const mediaError = e.target?.error;
+        let errorMessage = 'Unknown error';
+        if (mediaError) {
+          switch (mediaError.code) {
+            case MediaError.MEDIA_ERR_ABORTED:
+              errorMessage = 'Video loading was aborted';
+              break;
+            case MediaError.MEDIA_ERR_NETWORK:
+              errorMessage = 'Network error while loading video';
+              break;
+            case MediaError.MEDIA_ERR_DECODE:
+              errorMessage = 'Video decoding failed - file may be corrupted or unsupported codec';
+              break;
+            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+              errorMessage = 'Video format not supported';
+              break;
+            default:
+              errorMessage = mediaError.message || `Error code: ${mediaError.code}`;
+          }
+        }
+        setError(`Error loading video: ${errorMessage}`);
         setIsLocalLoading(false);
       };
 
