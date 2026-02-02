@@ -44,7 +44,13 @@ const ConversionPrompt = ({
       onConversionComplete(convertedBlob);
     } catch (err) {
       console.error('Conversion error:', err);
-      setError(err.message || err.toString() || 'Unknown error occurred');
+      const errorMsg = err.message || err.toString() || 'Unknown error occurred';
+      // Check for mobile memory issues
+      if (errorMsg.includes('Out of memory') || errorMsg.includes('RangeError')) {
+        setError('Out of memory - mobile browsers have limited memory for video conversion. Please try on a desktop browser or convert the video externally.');
+      } else {
+        setError(errorMsg);
+      }
       setStatus('error');
     }
   };
