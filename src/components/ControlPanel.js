@@ -908,7 +908,7 @@ const ControlPanel = ({
                 <ControlGroup isMobile={isMobile} style={{ marginTop: '15px' }}>
                     
                     {/* Volume Lighting/Shading Controls */}
-                    <div style={{ marginTop: '15px', marginBottom: '10px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
                           <FaLightbulb style={{ marginRight: '10px' }} />
@@ -973,7 +973,7 @@ const ControlPanel = ({
                     </div>
                     
                     {/* Transfer Function / Color Map for Volume */}
-                    <div style={{ marginTop: '15px', marginBottom: '10px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+                    <div style={{ marginTop: '15px', marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                         <FaPalette style={{ marginRight: '10px' }} />
                         Color Map
