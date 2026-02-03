@@ -20,7 +20,6 @@ class VolumeRenderer {
       renderMode: 0, // 0 = accumulate, 1 = MIP
       volumeLength: 1.0,
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
-      clipOffset: { x: 0, y: 0, z: 0 },
     };
   }
 
@@ -68,7 +67,7 @@ class VolumeRenderer {
         'world', 'worldViewProjection', 'cameraPosition',
         'volumeScale', 'stepSize', 'opacity', 'brightness',
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
-        'clipMin', 'clipMax', 'clipOffset'
+        'clipMin', 'clipMax'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -111,10 +110,6 @@ class VolumeRenderer {
     const cb = this.settings.clipBounds;
     this.material.setVector3('clipMin', new BABYLON.Vector3(cb.xMin, cb.yMin, cb.zMin));
     this.material.setVector3('clipMax', new BABYLON.Vector3(cb.xMax, cb.yMax, cb.zMax));
-    
-    // Set clip offset
-    const co = this.settings.clipOffset;
-    this.material.setVector3('clipOffset', new BABYLON.Vector3(co.x, co.y, co.z));
   }
 
   setStepSize(value) {
@@ -166,11 +161,6 @@ class VolumeRenderer {
 
   setClipBounds(bounds) {
     this.settings.clipBounds = { ...bounds };
-    this.updateUniforms();
-  }
-
-  setClipOffset(offset) {
-    this.settings.clipOffset = { ...offset };
     this.updateUniforms();
   }
 

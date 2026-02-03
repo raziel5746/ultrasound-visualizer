@@ -105,6 +105,144 @@ const ControlItem = ({ icon, label, value, min, max, step, onChange, unit = '', 
   );
 };
 
+// Dual-handle range slider with draggable middle section for volume clipping
+const VolumeClipSlider = ({ label, values, onChange, isMobile }) => {
+  const containerRef = useRef(null);
+  const [isDraggingMiddle, setIsDraggingMiddle] = useState(false);
+  const dragStartRef = useRef({ x: 0, values: [0, 1] });
+  
+  const handleMiddleMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingMiddle(true);
+    dragStartRef.current = {
+      x: e.clientX || e.touches?.[0]?.clientX || 0,
+      values: [...values]
+    };
+  };
+  
+  useEffect(() => {
+    if (!isDraggingMiddle) return;
+    
+    const handleMouseMove = (e) => {
+      if (!containerRef.current) return;
+      const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
+      const rect = containerRef.current.getBoundingClientRect();
+      const deltaX = clientX - dragStartRef.current.x;
+      const deltaPercent = deltaX / rect.width;
+      
+      const rangeSize = dragStartRef.current.values[1] - dragStartRef.current.values[0];
+      let newMin = dragStartRef.current.values[0] + deltaPercent;
+      let newMax = dragStartRef.current.values[1] + deltaPercent;
+      
+      if (newMin < 0) { newMin = 0; newMax = rangeSize; }
+      if (newMax > 1) { newMax = 1; newMin = 1 - rangeSize; }
+      
+      onChange([Math.max(0, Math.min(1, newMin)), Math.max(0, Math.min(1, newMax))]);
+    };
+    
+    const handleMouseUp = () => setIsDraggingMiddle(false);
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove);
+    window.addEventListener('touchend', handleMouseUp);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [isDraggingMiddle, onChange]);
+  
+  return (
+    <div ref={containerRef} style={{ marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+        <span style={{ fontSize: isMobile ? '12px' : '13px', color: '#aaa' }}>{label}</span>
+        <span style={{ fontSize: '11px', color: '#666' }}>
+          {values[0].toFixed(2)} - {values[1].toFixed(2)}
+        </span>
+      </div>
+      <Range
+        values={values}
+        step={0.01}
+        min={0}
+        max={1}
+        onChange={onChange}
+        renderTrack={({ props, children }) => (
+          <div
+            onMouseDown={props.onMouseDown}
+            onTouchStart={props.onTouchStart}
+            style={{
+              ...props.style,
+              height: '28px',
+              display: 'flex',
+              width: '100%'
+            }}
+          >
+            <div
+              ref={props.ref}
+              style={{
+                height: '8px',
+                width: '100%',
+                borderRadius: '4px',
+                background: getTrackBackground({
+                  values,
+                  colors: ['#222', '#3498db', '#222'],
+                  min: 0,
+                  max: 1
+                }),
+                alignSelf: 'center',
+                position: 'relative'
+              }}
+            >
+              {/* Draggable middle section */}
+              <div
+                onMouseDown={handleMiddleMouseDown}
+                onTouchStart={handleMiddleMouseDown}
+                style={{
+                  position: 'absolute',
+                  left: `${values[0] * 100}%`,
+                  width: `${(values[1] - values[0]) * 100}%`,
+                  height: '100%',
+                  cursor: 'grab',
+                  borderRadius: '4px',
+                }}
+              />
+              {children}
+            </div>
+          </div>
+        )}
+        renderThumb={({ props, isDragged }) => (
+          <div
+            {...props}
+            style={{
+              ...props.style,
+              height: '16px',
+              width: '16px',
+              borderRadius: '3px',
+              backgroundColor: isDragged ? '#3498db' : '#444',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              boxShadow: '0px 1px 4px rgba(0,0,0,0.4)',
+              border: '1px solid #555',
+              cursor: 'ew-resize'
+            }}
+          >
+            <div style={{
+              width: '2px',
+              height: '8px',
+              backgroundColor: isDragged ? '#fff' : '#888'
+            }} />
+          </div>
+        )}
+      />
+    </div>
+  );
+};
+
 const RangeSlider = ({ label, min, max, values, onChange, isMobile }) => (
   <div style={{ marginBottom: '15px' }}>
     <label style={{ 
@@ -253,8 +391,6 @@ const ControlPanel = ({
   setVolumeLength,
   volumeClipBounds,
   setVolumeClipBounds,
-  volumeClipOffset,
-  setVolumeClipOffset,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -543,96 +679,33 @@ const ControlPanel = ({
                       displayValue={(v) => v.toFixed(1)}
                       isMobile={isMobile}
                     />
-                    {/* Volume Clipping Controls */}
+                    {/* Volume Clipping Controls - Dual-handle sliders with draggable middle */}
                     <div style={{ marginTop: '10px', marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                         <FaCube style={{ marginRight: '10px' }} />
                         Volume Clipping
                       </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                        <div>
-                          <span>X Min</span>
-                          <input type="range" min="0" max="1" step="0.01" 
-                            value={volumeClipBounds?.xMin || 0}
-                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, xMin: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>X Max</span>
-                          <input type="range" min="0" max="1" step="0.01"
-                            value={volumeClipBounds?.xMax || 1}
-                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, xMax: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>Y Min</span>
-                          <input type="range" min="0" max="1" step="0.01"
-                            value={volumeClipBounds?.yMin || 0}
-                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, yMin: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>Y Max</span>
-                          <input type="range" min="0" max="1" step="0.01"
-                            value={volumeClipBounds?.yMax || 1}
-                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, yMax: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>Z Min</span>
-                          <input type="range" min="0" max="1" step="0.01"
-                            value={volumeClipBounds?.zMin || 0}
-                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, zMin: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>Z Max</span>
-                          <input type="range" min="0" max="1" step="0.01"
-                            value={volumeClipBounds?.zMax || 1}
-                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, zMax: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Volume Position Offset Controls */}
-                    <div style={{ marginTop: '10px', marginBottom: '10px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                        <FaArrowsAltH style={{ marginRight: '10px' }} />
-                        Volume Position
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                        <div>
-                          <span>X</span>
-                          <input type="range" min="-1" max="1" step="0.01"
-                            value={volumeClipOffset?.x || 0}
-                            onChange={(e) => setVolumeClipOffset(prev => ({...prev, x: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>Y</span>
-                          <input type="range" min="-1" max="1" step="0.01"
-                            value={volumeClipOffset?.y || 0}
-                            onChange={(e) => setVolumeClipOffset(prev => ({...prev, y: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <span>Z</span>
-                          <input type="range" min="-1" max="1" step="0.01"
-                            value={volumeClipOffset?.z || 0}
-                            onChange={(e) => setVolumeClipOffset(prev => ({...prev, z: parseFloat(e.target.value)}))}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </div>
+                      <VolumeClipSlider
+                        label="X Axis"
+                        axis="x"
+                        values={[volumeClipBounds?.xMin || 0, volumeClipBounds?.xMax || 1]}
+                        onChange={([min, max]) => setVolumeClipBounds(prev => ({...prev, xMin: min, xMax: max}))}
+                        isMobile={isMobile}
+                      />
+                      <VolumeClipSlider
+                        label="Y Axis"
+                        axis="y"
+                        values={[volumeClipBounds?.yMin || 0, volumeClipBounds?.yMax || 1]}
+                        onChange={([min, max]) => setVolumeClipBounds(prev => ({...prev, yMin: min, yMax: max}))}
+                        isMobile={isMobile}
+                      />
+                      <VolumeClipSlider
+                        label="Z Axis (Depth)"
+                        axis="z"
+                        values={[volumeClipBounds?.zMin || 0, volumeClipBounds?.zMax || 1]}
+                        onChange={([min, max]) => setVolumeClipBounds(prev => ({...prev, zMin: min, zMax: max}))}
+                        isMobile={isMobile}
+                      />
                     </div>
                   </>
                 )}

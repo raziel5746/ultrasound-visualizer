@@ -41,7 +41,6 @@ uniform int maxSteps;
 uniform int renderMode; // 0 = accumulate, 1 = MIP
 uniform vec3 clipMin;   // Clipping bounds min (0-1)
 uniform vec3 clipMax;   // Clipping bounds max (0-1)
-uniform vec3 clipOffset; // Position offset for clipped region (-1 to 1)
 
 varying vec3 vRayDir;
 varying vec3 vPosition;
@@ -97,14 +96,10 @@ void main() {
         samplePos = clamp(samplePos, vec3(0.001), vec3(0.999));
         samplePos.y = 1.0 - samplePos.y;  // Flip Y axis
         
-        // Apply clipping bounds with offset - skip samples outside the clip region
-        // Offset shifts what part of the volume we sample from
-        vec3 offsetClipMin = clipMin + clipOffset;
-        vec3 offsetClipMax = clipMax + clipOffset;
-        
-        if (samplePos.x < offsetClipMin.x || samplePos.x > offsetClipMax.x ||
-            samplePos.y < offsetClipMin.y || samplePos.y > offsetClipMax.y ||
-            samplePos.z < offsetClipMin.z || samplePos.z > offsetClipMax.z) {
+        // Apply clipping bounds - skip samples outside the clip region
+        if (samplePos.x < clipMin.x || samplePos.x > clipMax.x ||
+            samplePos.y < clipMin.y || samplePos.y > clipMax.y ||
+            samplePos.z < clipMin.z || samplePos.z > clipMax.z) {
             t += actualStep;
             continue;
         }

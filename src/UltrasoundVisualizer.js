@@ -79,9 +79,6 @@ const UltrasoundVisualizer = ({
     yMin: 0, yMax: 1,
     zMin: 0, zMax: 1
   }); // Normalized clipping bounds (0-1)
-  const [volumeClipOffset, setVolumeClipOffset] = useState({
-    x: 0, y: 0, z: 0
-  }); // Offset for moving the clipped region (-1 to 1)
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -453,11 +450,10 @@ const UltrasoundVisualizer = ({
           renderMode: volumeRenderType,
           volumeLength: volumeLength,
           clipBounds: volumeClipBounds,
-          clipOffset: volumeClipOffset,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipOffset]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1403,8 +1399,6 @@ const UltrasoundVisualizer = ({
         setVolumeLength={setVolumeLength}
         volumeClipBounds={volumeClipBounds}
         setVolumeClipBounds={setVolumeClipBounds}
-        volumeClipOffset={volumeClipOffset}
-        setVolumeClipOffset={setVolumeClipOffset}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

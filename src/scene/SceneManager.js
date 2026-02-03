@@ -625,7 +625,6 @@ class SceneManager {
     if (settings.renderMode !== undefined) this.volumeRenderer.setRenderMode(settings.renderMode);
     if (settings.volumeLength !== undefined) this.volumeRenderer.setVolumeLength(settings.volumeLength);
     if (settings.clipBounds !== undefined) this.volumeRenderer.setClipBounds(settings.clipBounds);
-    if (settings.clipOffset !== undefined) this.volumeRenderer.setClipOffset(settings.clipOffset);
   }
 
   updateVolumeCameraPosition() {
