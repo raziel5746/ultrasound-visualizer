@@ -22,6 +22,10 @@ class VolumeRenderer {
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
       clipMode: 'cube', // 'cube' or 'sphere'
       sphereClip: { x: 0.5, y: 0.5, z: 0.5, diameter: 0.5 },
+      // Transfer function curve controls
+      gamma: 1.0,        // 0.1-3.0, default 1.0
+      softness: 0.3,     // 0.01-1.0, threshold softness
+      minOpacity: 0.0,   // 0-0.5, preserves low-intensity data
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
       transferFunction: 'grayscale',
       isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
@@ -74,6 +78,7 @@ class VolumeRenderer {
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
         'clipMin', 'clipMax',
         'clipMode', 'sphereCenter', 'sphereRadius',
+        'gamma', 'softness', 'minOpacity',
         'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
         'transferFunctionType',
         'isoLevel', 'isoSmoothness', 'isoOpacity'
@@ -125,6 +130,11 @@ class VolumeRenderer {
     const sc = this.settings.sphereClip;
     this.material.setVector3('sphereCenter', new BABYLON.Vector3(sc.x, sc.y, sc.z));
     this.material.setFloat('sphereRadius', sc.diameter / 2.0);
+    
+    // Set transfer function curve controls
+    this.material.setFloat('gamma', this.settings.gamma);
+    this.material.setFloat('softness', this.settings.softness);
+    this.material.setFloat('minOpacity', this.settings.minOpacity);
     
     // Set lighting
     const lt = this.settings.lighting;
@@ -205,6 +215,38 @@ class VolumeRenderer {
   setSphereClip(sphereClip) {
     this.settings.sphereClip = { ...sphereClip };
     this.updateUniforms();
+  }
+
+  setGamma(gamma) {
+    this.settings.gamma = gamma;
+    this.updateUniforms();
+  }
+
+  setSoftness(softness) {
+    this.settings.softness = softness;
+    this.updateUniforms();
+  }
+
+  setMinOpacity(minOpacity) {
+    this.settings.minOpacity = minOpacity;
+    this.updateUniforms();
+  }
+
+  // Apply visualization preset
+  applyPreset(preset) {
+    const presets = {
+      'default': { gamma: 1.0, softness: 0.3, minOpacity: 0.0, threshold: 0.0 },
+      'fullRange': { gamma: 0.7, softness: 0.8, minOpacity: 0.05, threshold: 0.0 },
+      'highContrast': { gamma: 1.5, softness: 0.15, minOpacity: 0.0, threshold: 0.1 },
+      'softTissue': { gamma: 0.5, softness: 0.5, minOpacity: 0.1, threshold: 0.0 },
+    };
+    const p = presets[preset] || presets['default'];
+    this.settings.gamma = p.gamma;
+    this.settings.softness = p.softness;
+    this.settings.minOpacity = p.minOpacity;
+    this.settings.threshold = p.threshold;
+    this.updateUniforms();
+    return p; // Return preset values for UI sync
   }
 
   setLighting(lighting) {

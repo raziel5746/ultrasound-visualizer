@@ -434,6 +434,8 @@ const ControlPanel = ({
   setVolumeClipMode,
   volumeSphereClip,
   setVolumeSphereClip,
+  volumeCurve,
+  setVolumeCurve,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -1002,6 +1004,95 @@ const ControlPanel = ({
                         <option value="plasma">Plasma (Purple → Pink → Orange → Yellow)</option>
                         <option value="rainbow">Rainbow</option>
                       </select>
+                    </div>
+                    
+                    {/* Visualization Presets and Curve Controls */}
+                    <div style={{ marginTop: '15px', marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                        <FaAdjust style={{ marginRight: '10px' }} />
+                        Visualization Preset
+                      </label>
+                      <select
+                        value={volumeCurve?.preset || 'default'}
+                        onChange={(e) => {
+                          const preset = e.target.value;
+                          const presetValues = {
+                            'default': { gamma: 1.0, softness: 0.3, minOpacity: 0.0 },
+                            'fullRange': { gamma: 0.7, softness: 0.8, minOpacity: 0.05 },
+                            'highContrast': { gamma: 1.5, softness: 0.15, minOpacity: 0.0 },
+                            'softTissue': { gamma: 0.5, softness: 0.5, minOpacity: 0.1 },
+                          };
+                          const p = presetValues[preset] || presetValues['default'];
+                          setVolumeCurve && setVolumeCurve({ ...p, preset });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          backgroundColor: '#333333',
+                          color: '#ffffff',
+                          border: '1px solid #404040',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="default">Default</option>
+                        <option value="fullRange">Full Range (reveals low-intensity)</option>
+                        <option value="highContrast">High Contrast</option>
+                        <option value="softTissue">Soft Tissue (hypoechoic structures)</option>
+                      </select>
+                      
+                      {/* Gamma slider */}
+                      <div style={{ marginTop: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>Gamma</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeCurve?.gamma || 1.0).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="3.0"
+                          step="0.05"
+                          value={volumeCurve?.gamma || 1.0}
+                          onChange={(e) => setVolumeCurve && setVolumeCurve(prev => ({...prev, gamma: parseFloat(e.target.value), preset: 'custom'}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      
+                      {/* Softness slider */}
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>Softness</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeCurve?.softness || 0.3).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.01"
+                          max="1.0"
+                          step="0.01"
+                          value={volumeCurve?.softness || 0.3}
+                          onChange={(e) => setVolumeCurve && setVolumeCurve(prev => ({...prev, softness: parseFloat(e.target.value), preset: 'custom'}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      
+                      {/* Min Opacity slider */}
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>Min Opacity (preserve low-intensity)</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeCurve?.minOpacity || 0.0).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="0.5"
+                          step="0.01"
+                          value={volumeCurve?.minOpacity || 0.0}
+                          onChange={(e) => setVolumeCurve && setVolumeCurve(prev => ({...prev, minOpacity: parseFloat(e.target.value), preset: 'custom'}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
                     </div>
                 </ControlGroup>
               )}

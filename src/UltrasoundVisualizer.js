@@ -97,6 +97,13 @@ const UltrasoundVisualizer = ({
     smoothness: 1.0,  // Step multiplier for smoother surfaces (0.5-2)
     opacity: 1.0      // Surface opacity (0-1)
   });
+  // Transfer function curve controls
+  const [volumeCurve, setVolumeCurve] = useState({
+    gamma: 1.0,       // Gamma correction (0.1-3.0)
+    softness: 0.3,    // Threshold softness (0.01-1.0)
+    minOpacity: 0.0,  // Min opacity for low-intensity preservation (0-0.5)
+    preset: 'default' // Preset name: default, fullRange, highContrast, softTissue
+  });
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -470,13 +477,16 @@ const UltrasoundVisualizer = ({
           clipBounds: volumeClipBounds,
           clipMode: volumeClipMode,
           sphereClip: volumeSphereClip,
+          gamma: volumeCurve.gamma,
+          softness: volumeCurve.softness,
+          minOpacity: volumeCurve.minOpacity,
           lighting: volumeLighting,
           transferFunction: volumeTransferFunction,
           isosurface: volumeIsosurface,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeLighting, volumeTransferFunction, volumeIsosurface]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1426,6 +1436,8 @@ const UltrasoundVisualizer = ({
         setVolumeClipMode={setVolumeClipMode}
         volumeSphereClip={volumeSphereClip}
         setVolumeSphereClip={setVolumeSphereClip}
+        volumeCurve={volumeCurve}
+        setVolumeCurve={setVolumeCurve}
         volumeLighting={volumeLighting}
         setVolumeLighting={setVolumeLighting}
         volumeTransferFunction={volumeTransferFunction}
