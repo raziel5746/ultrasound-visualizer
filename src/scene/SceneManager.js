@@ -625,6 +625,8 @@ class SceneManager {
     if (settings.renderMode !== undefined) this.volumeRenderer.setRenderMode(settings.renderMode);
     if (settings.volumeLength !== undefined) this.volumeRenderer.setVolumeLength(settings.volumeLength);
     if (settings.clipBounds !== undefined) this.volumeRenderer.setClipBounds(settings.clipBounds);
+    if (settings.clipMode !== undefined) this.volumeRenderer.setClipMode(settings.clipMode);
+    if (settings.sphereClip !== undefined) this.volumeRenderer.setSphereClip(settings.sphereClip);
     if (settings.lighting !== undefined) this.volumeRenderer.setLighting(settings.lighting);
     if (settings.transferFunction !== undefined) this.volumeRenderer.setTransferFunction(settings.transferFunction);
     if (settings.isosurface !== undefined) this.volumeRenderer.setIsosurface(settings.isosurface);

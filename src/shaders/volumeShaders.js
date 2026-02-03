@@ -37,10 +37,14 @@ uniform float opacity;
 uniform float brightness;
 uniform float threshold;
 uniform vec3 volumeDimensions;
+uniform vec3 volumeScale;   // Volume scaling for aspect ratio correction
 uniform int maxSteps;
 uniform int renderMode; // 0 = accumulate, 1 = MIP
 uniform vec3 clipMin;   // Clipping bounds min (0-1)
 uniform vec3 clipMax;   // Clipping bounds max (0-1)
+uniform int clipMode;   // 0 = box, 1 = sphere
+uniform vec3 sphereCenter;  // Sphere center (0-1 normalized)
+uniform float sphereRadius; // Sphere radius (0-1 normalized)
 
 // Lighting uniforms
 uniform int lightingEnabled;
@@ -223,12 +227,30 @@ void main() {
         samplePos = clamp(samplePos, vec3(0.001), vec3(0.999));
         samplePos.y = 1.0 - samplePos.y;  // Flip Y axis
         
-        // Apply clipping bounds - skip samples outside the clip region
-        if (samplePos.x < clipMin.x || samplePos.x > clipMax.x ||
-            samplePos.y < clipMin.y || samplePos.y > clipMax.y ||
-            samplePos.z < clipMin.z || samplePos.z > clipMax.z) {
-            t += actualStep;
-            continue;
+        // Apply clipping - skip samples outside the clip region
+        if (clipMode == 0) {
+            // Box clipping
+            if (samplePos.x < clipMin.x || samplePos.x > clipMax.x ||
+                samplePos.y < clipMin.y || samplePos.y > clipMax.y ||
+                samplePos.z < clipMin.z || samplePos.z > clipMax.z) {
+                t += actualStep;
+                continue;
+            }
+        } else {
+            // Sphere clipping - only render what's inside the sphere
+            // Scale the distance by volumeScale to make sphere perfectly round in world space
+            vec3 toSample = samplePos - sphereCenter;
+            // Compensate for volume aspect ratio - scale to world space
+            vec3 scaledDist = toSample * volumeScale;
+            float distSq = dot(scaledDist, scaledDist);
+            // Scale radius by average scale to keep it consistent
+            float avgScale = (volumeScale.x + volumeScale.y + volumeScale.z) / 3.0;
+            float scaledRadius = sphereRadius * avgScale;
+            float radiusSq = scaledRadius * scaledRadius;
+            if (distSq > radiusSq) {
+                t += actualStep;
+                continue;
+            }
         }
         
         float intensity = texture(volumeTexture, samplePos).r;
