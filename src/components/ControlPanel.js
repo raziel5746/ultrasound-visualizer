@@ -391,6 +391,8 @@ const ControlPanel = ({
   setVolumeLength,
   volumeClipBounds,
   setVolumeClipBounds,
+  volumeLighting,
+  setVolumeLighting,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -701,11 +703,75 @@ const ControlPanel = ({
                       />
                       <VolumeClipSlider
                         label="Z Axis (Depth)"
-                        axis="z"
                         values={[volumeClipBounds?.zMin || 0, volumeClipBounds?.zMax || 1]}
                         onChange={([min, max]) => setVolumeClipBounds(prev => ({...prev, zMin: min, zMax: max}))}
                         isMobile={isMobile}
                       />
+                    </div>
+                    
+                    {/* Volume Lighting/Shading Controls */}
+                    <div style={{ marginTop: '15px', marginBottom: '10px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          <FaLightbulb style={{ marginRight: '10px' }} />
+                          Lighting / Shading
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={volumeLighting?.enabled || false}
+                          onChange={(e) => setVolumeLighting(prev => ({...prev, enabled: e.target.checked}))}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </label>
+                      
+                      {volumeLighting?.enabled && (
+                        <div style={{ fontSize: '12px' }}>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                              <span>Ambient</span>
+                              <span style={{ color: '#666' }}>{(volumeLighting?.ambient || 0.3).toFixed(2)}</span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05"
+                              value={volumeLighting?.ambient || 0.3}
+                              onChange={(e) => setVolumeLighting(prev => ({...prev, ambient: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                              <span>Diffuse</span>
+                              <span style={{ color: '#666' }}>{(volumeLighting?.diffuse || 0.7).toFixed(2)}</span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05"
+                              value={volumeLighting?.diffuse || 0.7}
+                              onChange={(e) => setVolumeLighting(prev => ({...prev, diffuse: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                              <span>Specular</span>
+                              <span style={{ color: '#666' }}>{(volumeLighting?.specular || 0.4).toFixed(2)}</span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05"
+                              value={volumeLighting?.specular || 0.4}
+                              onChange={(e) => setVolumeLighting(prev => ({...prev, specular: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                              <span>Shininess</span>
+                              <span style={{ color: '#666' }}>{(volumeLighting?.shininess || 32).toFixed(0)}</span>
+                            </div>
+                            <input type="range" min="1" max="128" step="1"
+                              value={volumeLighting?.shininess || 32}
+                              onChange={(e) => setVolumeLighting(prev => ({...prev, shininess: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}

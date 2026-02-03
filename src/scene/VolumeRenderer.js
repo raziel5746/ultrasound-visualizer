@@ -20,6 +20,7 @@ class VolumeRenderer {
       renderMode: 0, // 0 = accumulate, 1 = MIP
       volumeLength: 1.0,
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
+      lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
     };
   }
 
@@ -67,7 +68,8 @@ class VolumeRenderer {
         'world', 'worldViewProjection', 'cameraPosition',
         'volumeScale', 'stepSize', 'opacity', 'brightness',
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
-        'clipMin', 'clipMax'
+        'clipMin', 'clipMax',
+        'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -110,6 +112,14 @@ class VolumeRenderer {
     const cb = this.settings.clipBounds;
     this.material.setVector3('clipMin', new BABYLON.Vector3(cb.xMin, cb.yMin, cb.zMin));
     this.material.setVector3('clipMax', new BABYLON.Vector3(cb.xMax, cb.yMax, cb.zMax));
+    
+    // Set lighting
+    const lt = this.settings.lighting;
+    this.material.setInt('lightingEnabled', lt.enabled ? 1 : 0);
+    this.material.setFloat('ambient', lt.ambient);
+    this.material.setFloat('diffuse', lt.diffuse);
+    this.material.setFloat('specular', lt.specular);
+    this.material.setFloat('shininess', lt.shininess);
   }
 
   setStepSize(value) {
@@ -161,6 +171,11 @@ class VolumeRenderer {
 
   setClipBounds(bounds) {
     this.settings.clipBounds = { ...bounds };
+    this.updateUniforms();
+  }
+
+  setLighting(lighting) {
+    this.settings.lighting = { ...lighting };
     this.updateUniforms();
   }
 
