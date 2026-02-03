@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaLock, FaLockOpen } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaLock, FaLockOpen, FaCube } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
@@ -240,6 +240,21 @@ const ControlPanel = ({
   onTextureFilterChange,
   onRotationLockChange,
   isRotationLocked,
+  // Volume rendering props
+  renderMode,
+  setRenderMode,
+  volumeThreshold,
+  setVolumeThreshold,
+  volumeStepSize,
+  setVolumeStepSize,
+  volumeRenderType,
+  setVolumeRenderType,
+  volumeLength,
+  setVolumeLength,
+  volumeClipBounds,
+  setVolumeClipBounds,
+  volumeClipOffset,
+  setVolumeClipOffset,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -339,8 +354,8 @@ const ControlPanel = ({
             maxWidth: '100%',
             margin: '0 auto',
           }}>
-            {!isMobile && (
-              // Slice Control section for desktop view
+            {/* Slice Control - hide in volume mode */}
+            {!isMobile && renderMode !== 'volume' && (
               <ControlGroup isMobile={isMobile}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
                   <SliceControl
@@ -415,28 +430,33 @@ const ControlPanel = ({
                   onImmediateChange={onImmediateContrastChange}
                   isMobile={isMobile}
                 />
-                <ControlItem
-                  icon={<FaLightbulb />}
-                  label="Global Light"
-                  value={globalLightIntensity}
-                  min={0}
-                  max={5}
-                  step={0.01}
-                  onChange={setGlobalLightIntensity}
-                  onImmediateChange={onImmediateGlobalLightChange}
-                  isMobile={isMobile}
-                />
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <FaPalette style={{ marginRight: '10px' }} />
-                    Blend Mode:
-                  </label>
-                  <select 
-                    value={blendMode} 
-                    onChange={(e) => setBlendMode(parseInt(e.target.value))}
-                    style={{ 
-                      width: '100%', 
-                      padding: '8px 10px', // More padding
+                {/* Global Light - hide in volume mode */}
+                {renderMode !== 'volume' && (
+                  <ControlItem
+                    icon={<FaLightbulb />}
+                    label="Global Light"
+                    value={globalLightIntensity}
+                    min={0}
+                    max={5}
+                    step={0.01}
+                    onChange={setGlobalLightIntensity}
+                    onImmediateChange={onImmediateGlobalLightChange}
+                    isMobile={isMobile}
+                  />
+                )}
+                {/* Blend Mode - hide in volume mode */}
+                {renderMode !== 'volume' && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                      <FaPalette style={{ marginRight: '10px' }} />
+                      Blend Mode:
+                    </label>
+                    <select 
+                      value={blendMode} 
+                      onChange={(e) => setBlendMode(parseInt(e.target.value))}
+                      style={{ 
+                        width: '100%', 
+                        padding: '8px 10px', // More padding
                       backgroundColor: '#333333',
                       color: '#ffffff',
                       border: '1px solid #404040',
@@ -457,66 +477,229 @@ const ControlPanel = ({
                       </option>
                     ))}
                   </select>
-                </div>
-                
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <FaAdjust style={{ marginRight: '10px' }} />
-                    Color Map:
-                  </label>
-                  <select 
-                    value={colorMap} 
-                    onChange={(e) => {
-                      const newColorMap = e.target.value;
-                      setColorMap(newColorMap);
-                      setColorMapParams(ColorMaps[newColorMap]?.defaultParams || {});
-                    }}
-                    style={{ 
-                      width: '100%', 
-                      padding: '8px 10px', // More padding
-                      backgroundColor: '#333333',
-                      color: '#ffffff',
-                      border: '1px solid #404040',
-                      borderRadius: '6px',
-                      marginLeft: 0,
-                      fontSize: isMobile ? '14px' : '16px', // Updated to 16px for desktop
-                      cursor: 'pointer',
-                      outline: 'none',
-                      transition: 'border-color 0.2s ease',
-                      ':hover': {
-                        borderColor: '#3498db'
-                      }
-                    }}
-                  >
-                    {colorMaps.map((map) => (
-                      <option key={map.key} value={map.key}>
-                        {map.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Color Map Parameters */}
-                {hasParams && (
-                  <div style={{ marginTop: '10px' }}>
-                    {Object.entries(currentColorMap.defaultParams).map(([key, defaultValue]) => (
-                      <ControlItem
-                        key={key}
-                        label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                        value={colorMapParams[key] || defaultValue}
-                        min={0}
-                        max={key.includes('Offset') ? 2 : 3}
-                        step={0.1}
-                        onChange={(value) => {
-                          setColorMapParams({
-                            ...colorMapParams,
-                            [key]: value
-                          });
-                        }}
-                        displayValue={(v) => v.toFixed(2)}
-                      />
-                    ))}
                   </div>
+                )}
+
+                {/* Volume Rendering Controls */}
+                {renderMode === 'volume' && setVolumeThreshold && (
+                  <>
+                    <div style={{ marginBottom: '15px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                        <FaAdjust style={{ marginRight: '10px' }} />
+                        Volume Type:
+                      </label>
+                      <select 
+                        value={volumeRenderType || 0} 
+                        onChange={(e) => setVolumeRenderType(parseInt(e.target.value))}
+                        style={{ 
+                          width: '100%', 
+                          padding: '8px 10px',
+                          backgroundColor: '#333333',
+                          color: '#ffffff',
+                          border: '1px solid #404040',
+                          borderRadius: '6px',
+                          fontSize: isMobile ? '14px' : '16px',
+                          cursor: 'pointer',
+                          outline: 'none',
+                        }}
+                      >
+                        <option value={0}>Accumulate</option>
+                        <option value={1}>Max Intensity (MIP)</option>
+                      </select>
+                    </div>
+                    {/* Threshold - only show in Accumulate mode (not MIP) */}
+                    {volumeRenderType !== 1 && (
+                      <ControlItem
+                        icon={<FaEye />}
+                        label="Threshold"
+                        value={volumeThreshold}
+                        min={0}
+                        max={0.5}
+                        step={0.01}
+                        onChange={setVolumeThreshold}
+                        displayValue={(v) => v.toFixed(2)}
+                        isMobile={isMobile}
+                      />
+                    )}
+                    <ControlItem
+                      icon={<FaLayerGroup />}
+                      label="Quality"
+                      value={1 - (volumeStepSize / 0.4)}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(v) => setVolumeStepSize(0.4 * (1 - v))}
+                      displayValue={(v) => v.toFixed(2)}
+                      isMobile={isMobile}
+                    />
+                    <ControlItem
+                      icon={<FaArrowsAltH />}
+                      label="Volume Length"
+                      value={volumeLength}
+                      min={0.2}
+                      max={3}
+                      step={0.1}
+                      onChange={setVolumeLength}
+                      displayValue={(v) => v.toFixed(1)}
+                      isMobile={isMobile}
+                    />
+                    {/* Volume Clipping Controls */}
+                    <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                        <FaCube style={{ marginRight: '10px' }} />
+                        Volume Clipping
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                        <div>
+                          <span>X Min</span>
+                          <input type="range" min="0" max="1" step="0.01" 
+                            value={volumeClipBounds?.xMin || 0}
+                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, xMin: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>X Max</span>
+                          <input type="range" min="0" max="1" step="0.01"
+                            value={volumeClipBounds?.xMax || 1}
+                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, xMax: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>Y Min</span>
+                          <input type="range" min="0" max="1" step="0.01"
+                            value={volumeClipBounds?.yMin || 0}
+                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, yMin: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>Y Max</span>
+                          <input type="range" min="0" max="1" step="0.01"
+                            value={volumeClipBounds?.yMax || 1}
+                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, yMax: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>Z Min</span>
+                          <input type="range" min="0" max="1" step="0.01"
+                            value={volumeClipBounds?.zMin || 0}
+                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, zMin: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>Z Max</span>
+                          <input type="range" min="0" max="1" step="0.01"
+                            value={volumeClipBounds?.zMax || 1}
+                            onChange={(e) => setVolumeClipBounds(prev => ({...prev, zMax: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Volume Position Offset Controls */}
+                    <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                        <FaArrowsAltH style={{ marginRight: '10px' }} />
+                        Volume Position
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                        <div>
+                          <span>X</span>
+                          <input type="range" min="-1" max="1" step="0.01"
+                            value={volumeClipOffset?.x || 0}
+                            onChange={(e) => setVolumeClipOffset(prev => ({...prev, x: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>Y</span>
+                          <input type="range" min="-1" max="1" step="0.01"
+                            value={volumeClipOffset?.y || 0}
+                            onChange={(e) => setVolumeClipOffset(prev => ({...prev, y: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <span>Z</span>
+                          <input type="range" min="-1" max="1" step="0.01"
+                            value={volumeClipOffset?.z || 0}
+                            onChange={(e) => setVolumeClipOffset(prev => ({...prev, z: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {/* Color Map - hide in volume mode */}
+                {renderMode !== 'volume' && (
+                  <>
+                    <div style={{ marginBottom: '15px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                        <FaAdjust style={{ marginRight: '10px' }} />
+                        Color Map:
+                      </label>
+                      <select 
+                        value={colorMap} 
+                        onChange={(e) => {
+                          const newColorMap = e.target.value;
+                          setColorMap(newColorMap);
+                          setColorMapParams(ColorMaps[newColorMap]?.defaultParams || {});
+                        }}
+                        style={{ 
+                          width: '100%', 
+                          padding: '8px 10px',
+                          backgroundColor: '#333333',
+                          color: '#ffffff',
+                          border: '1px solid #404040',
+                          borderRadius: '6px',
+                          marginLeft: 0,
+                          fontSize: isMobile ? '14px' : '16px',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          transition: 'border-color 0.2s ease',
+                          ':hover': {
+                            borderColor: '#3498db'
+                          }
+                        }}
+                      >
+                        {colorMaps.map((map) => (
+                          <option key={map.key} value={map.key}>
+                            {map.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Color Map Parameters */}
+                    {hasParams && (
+                      <div style={{ marginTop: '10px' }}>
+                        {Object.entries(currentColorMap.defaultParams).map(([key, defaultValue]) => (
+                          <ControlItem
+                            key={key}
+                            label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                            value={colorMapParams[key] || defaultValue}
+                            min={0}
+                            max={key.includes('Offset') ? 2 : 3}
+                            step={0.1}
+                            onChange={(value) => {
+                              setColorMapParams({
+                                ...colorMapParams,
+                                [key]: value
+                              });
+                            }}
+                            displayValue={(v) => v.toFixed(2)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </ControlGroup>
             </div>
@@ -533,8 +716,8 @@ const ControlPanel = ({
               display: 'flex',
               flexDirection: 'column',
             }}>
-              {isMobile && (
-                // Slice Control section for mobile view
+              {/* Mobile Slice Control - hide in volume mode */}
+              {isMobile && renderMode !== 'volume' && (
                 <ControlGroup isMobile={isMobile}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
                     <SliceControl
@@ -550,86 +733,92 @@ const ControlPanel = ({
                 </ControlGroup>
               )}
 
-              <ControlGroup isMobile={isMobile}>
-                <ControlItem
-                  icon={<FaLayerGroup />}
-                  label="Stack Length"
-                  value={stackLength}
-                  min={0.20}
-                  max={3}
-                  step={0.01}
-                  onChange={setStackLength}
-                  onImmediateChange={onImmediateStackLengthChange}
-                  isMobile={isMobile}
-                />
-                <ControlItem
-                  icon={<FaImages />}
-                  label="Frames to Show"
-                  value={framePercentage}
-                  min={1}
-                  max={100}
-                  step={0.1}
-                  onChange={setFramePercentage}
-                  onImmediateChange={onImmediateFramePercentageChange}
-                  unit="%"
-                  isMobile={isMobile}
-                />
-                <RangeSlider
-                  label="Slice Range"
-                  min={0}
-                  max={100}
-                  values={sliceRange}
-                  onChange={setSliceRange}
-                  isMobile={isMobile}
-                />
-                <ControlItem
-                  icon={<FaArrowsAltH />}
-                  label="Slice Position"
-                  value={sliceRange[0]}
-                  min={0}
-                  max={100 - (sliceRange[1] - sliceRange[0])}
-                  step={1}
-                  onChange={handleSlicePositionChange}
-                  onImmediateChange={onImmediateSlicePositionChange}
-                  unit="%"
-                  isMobile={isMobile}
-                />
-              </ControlGroup>
+              {/* Plane-specific controls - hide in volume mode */}
+              {renderMode !== 'volume' && (
+                <ControlGroup isMobile={isMobile}>
+                  <ControlItem
+                    icon={<FaLayerGroup />}
+                    label="Stack Length"
+                    value={stackLength}
+                    min={0.20}
+                    max={3}
+                    step={0.01}
+                    onChange={setStackLength}
+                    onImmediateChange={onImmediateStackLengthChange}
+                    isMobile={isMobile}
+                  />
+                  <ControlItem
+                    icon={<FaImages />}
+                    label="Frames to Show"
+                    value={framePercentage}
+                    min={1}
+                    max={100}
+                    step={0.1}
+                    onChange={setFramePercentage}
+                    onImmediateChange={onImmediateFramePercentageChange}
+                    unit="%"
+                    isMobile={isMobile}
+                  />
+                  <RangeSlider
+                    label="Slice Range"
+                    min={0}
+                    max={100}
+                    values={sliceRange}
+                    onChange={setSliceRange}
+                    isMobile={isMobile}
+                  />
+                  <ControlItem
+                    icon={<FaArrowsAltH />}
+                    label="Slice Position"
+                    value={sliceRange[0]}
+                    min={0}
+                    max={100 - (sliceRange[1] - sliceRange[0])}
+                    step={1}
+                    onChange={handleSlicePositionChange}
+                    onImmediateChange={onImmediateSlicePositionChange}
+                    unit="%"
+                    isMobile={isMobile}
+                  />
+                </ControlGroup>
+              )}
             </div>
           </div>
         </>
       )}
-      <ControlGroup isMobile={isMobile} style={{ marginTop: isMobile ? 0 : '24px' }}>
-        <ControlItem
-          icon={<FaSun />}
-          label="Texture Brightness"
-          value={textureFilters.brightness}
-          min={0.1}
-          max={3}
-          step={0.1}
-          onChange={(value) => {
-            const newFilters = { ...textureFilters, brightness: value };
-            setTextureFilters(newFilters);
-            onTextureFilterChange(newFilters);
-          }}
-          isMobile={isMobile}
-        />
+      {/* Texture filters - hide in volume mode */}
+      {renderMode !== 'volume' && (
+        <ControlGroup isMobile={isMobile} style={{ marginTop: isMobile ? 0 : '24px' }}>
+          <ControlItem
+            icon={<FaSun />}
+            label="Texture Brightness"
+            value={textureFilters.brightness}
+            min={0.1}
+            max={3}
+            step={0.1}
+            onChange={(value) => {
+              const newFilters = { ...textureFilters, brightness: value };
+              setTextureFilters(newFilters);
+              onTextureFilterChange(newFilters);
+            }}
+            isMobile={isMobile}
+          />
 
-        <ControlItem
-          icon={<FaAdjust />}
-          label="Texture Contrast"
-          value={textureFilters.contrast}
-          min={0}
-          max={3}
-          step={0.1}
-          onChange={(value) => {
-            const newFilters = { ...textureFilters, contrast: value };
-            setTextureFilters(newFilters);
-            onTextureFilterChange(newFilters);
-          }}
-          isMobile={isMobile}
-        />
-      </ControlGroup>
+          <ControlItem
+            icon={<FaAdjust />}
+            label="Texture Contrast"
+            value={textureFilters.contrast}
+            min={0}
+            max={3}
+            step={0.1}
+            onChange={(value) => {
+              const newFilters = { ...textureFilters, contrast: value };
+              setTextureFilters(newFilters);
+              onTextureFilterChange(newFilters);
+            }}
+            isMobile={isMobile}
+          />
+        </ControlGroup>
+      )}
     </div>
   );
 };

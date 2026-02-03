@@ -1,5 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { CAMERA } from '../utils/constants';
+import VolumeRenderer from './VolumeRenderer';
 
 class SceneManager {
   constructor(canvas) {
@@ -22,6 +23,9 @@ class SceneManager {
     this.orthoZoomSensitivity = 0.03;
     this.orthoPanSensitivity = 150;
     this.orthoExponent = 0.3;
+    // Volume rendering
+    this.volumeRenderer = null;
+    this.renderMode = 'planes'; // 'planes' or 'volume'
   }
 
   initialize() {
@@ -570,6 +574,70 @@ class SceneManager {
       const currentSize = Math.abs(this.orthographicCamera.orthoTop);
       const panningSensitivity = this.calculateOrthoPanningSensitivity(currentSize);
       this.orthographicCamera.panningSensibility = panningSensitivity;
+    }
+  }
+
+  // Volume Rendering Methods
+  initializeVolumeRenderer(volumeTexture, dimensions) {
+    if (!this.volumeRenderer) {
+      this.volumeRenderer = new VolumeRenderer(this.scene);
+    }
+    this.volumeRenderer.initialize(volumeTexture, dimensions);
+    this.volumeRenderer.setVisible(this.renderMode === 'volume');
+    return this.volumeRenderer;
+  }
+
+  setRenderMode(mode) {
+    console.log('Setting render mode to:', mode, 'frameMeshes:', this.frameMeshes.length, 'volumeRenderer:', !!this.volumeRenderer);
+    this.renderMode = mode;
+    
+    // Toggle visibility based on mode
+    if (mode === 'volume') {
+      this.frameMeshes.forEach(mesh => mesh.isVisible = false);
+      if (this.volumeRenderer) {
+        this.volumeRenderer.setVisible(true);
+        console.log('Volume renderer set to visible');
+      }
+    } else {
+      this.frameMeshes.forEach(mesh => mesh.isVisible = true);
+      if (this.volumeRenderer) {
+        this.volumeRenderer.setVisible(false);
+      }
+    }
+  }
+
+  getRenderMode() {
+    return this.renderMode;
+  }
+
+  getVolumeRenderer() {
+    return this.volumeRenderer;
+  }
+
+  updateVolumeSettings(settings) {
+    if (!this.volumeRenderer) return;
+    
+    if (settings.stepSize !== undefined) this.volumeRenderer.setStepSize(settings.stepSize);
+    if (settings.opacity !== undefined) this.volumeRenderer.setOpacity(settings.opacity);
+    if (settings.brightness !== undefined) this.volumeRenderer.setBrightness(settings.brightness);
+    if (settings.threshold !== undefined) this.volumeRenderer.setThreshold(settings.threshold);
+    if (settings.maxSteps !== undefined) this.volumeRenderer.setMaxSteps(settings.maxSteps);
+    if (settings.renderMode !== undefined) this.volumeRenderer.setRenderMode(settings.renderMode);
+    if (settings.volumeLength !== undefined) this.volumeRenderer.setVolumeLength(settings.volumeLength);
+    if (settings.clipBounds !== undefined) this.volumeRenderer.setClipBounds(settings.clipBounds);
+    if (settings.clipOffset !== undefined) this.volumeRenderer.setClipOffset(settings.clipOffset);
+  }
+
+  updateVolumeCameraPosition() {
+    if (this.volumeRenderer && this.currentCamera) {
+      this.volumeRenderer.updateCameraPosition(this.currentCamera.position);
+    }
+  }
+
+  disposeVolumeRenderer() {
+    if (this.volumeRenderer) {
+      this.volumeRenderer.dispose();
+      this.volumeRenderer = null;
     }
   }
 }

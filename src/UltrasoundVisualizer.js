@@ -7,6 +7,7 @@ import FilterToggleIcons from './components/FilterToggleIcons';
 import LoadingScreen from './components/LoadingScreen';
 import MobileToggle from './components/MobileToggle';
 import TextureAtlas from './utils/TextureAtlas';
+import VolumeTexture from './utils/VolumeTexture';
 import ColorPalette from './components/ColorPalette';
 import { ColorMaps } from './utils/ColorMaps';
 import SliceControl from './components/SliceControl';
@@ -66,6 +67,22 @@ const UltrasoundVisualizer = ({
   const [sliceRectangle, setSliceRectangle] = useState(null);
   const [storedVideoFile, setStoredVideoFile] = useState(null);
   const [showExtractionScreen, setShowExtractionScreen]=useState(true);
+  
+  // Volume rendering state
+  const [renderMode, setRenderMode] = useState('volume'); // 'planes' or 'volume' - default to volume
+  const [volumeThreshold, setVolumeThreshold] = useState(0.0);
+  const [volumeStepSize, setVolumeStepSize] = useState(0.002);
+  const [volumeRenderType, setVolumeRenderType] = useState(0); // 0 = accumulate, 1 = MIP
+  const [volumeLength, setVolumeLength] = useState(1.0); // 0.5 to 2.0 scale factor for Z depth
+  const [volumeClipBounds, setVolumeClipBounds] = useState({
+    xMin: 0, xMax: 1,
+    yMin: 0, yMax: 1,
+    zMin: 0, zMax: 1
+  }); // Normalized clipping bounds (0-1)
+  const [volumeClipOffset, setVolumeClipOffset] = useState({
+    x: 0, y: 0, z: 0
+  }); // Offset for moving the clipped region (-1 to 1)
+  const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
   const defaultValues = useMemo(() => ({
@@ -162,6 +179,11 @@ const UltrasoundVisualizer = ({
 
       sceneManagerRef.current.updateMeshOpacity(opacity);
       sceneManagerRef.current.updateClipPlanes(currentClipBounds.current);
+      
+      // Respect current render mode - hide planes if in volume mode
+      if (sceneManagerRef.current.getRenderMode() === 'volume') {
+        sceneManagerRef.current.setRenderMode('volume');
+      }
     }
   }, [
     textureAtlas,
@@ -190,6 +212,8 @@ const UltrasoundVisualizer = ({
       const renderLoop = (time) => {
         if (time - lastRenderTime.current >= 1000 / targetFps) {
           if (sceneManagerRef.current) {
+            // Update camera position for volume rendering before each frame
+            sceneManagerRef.current.updateVolumeCameraPosition();
             sceneManagerRef.current.renderFrame();
           }
           lastRenderTime.current = time;
@@ -366,14 +390,33 @@ const UltrasoundVisualizer = ({
             processedFrames += batchBitmaps.length;
           }
 
+          // Create volume texture FIRST (before atlas closes bitmaps)
+          try {
+            if (sceneManagerRef.current) {
+              console.log('Creating volume texture from', allBitmaps.length, 'bitmaps');
+              const volTex = new VolumeTexture(sceneManagerRef.current.scene);
+              const volumeTexture = volTex.createFromFrames(allBitmaps);
+              if (volumeTexture) {
+                volumeTextureRef.current = volTex;
+                sceneManagerRef.current.initializeVolumeRenderer(
+                  volumeTexture,
+                  volTex.getDimensions()
+                );
+                console.log('Volume texture created successfully');
+              }
+            }
+          } catch (volError) {
+            console.error('Volume texture creation failed:', volError);
+          }
+
           const atlas = new TextureAtlas(sceneManagerRef.current.scene);
           await atlas.createAtlas(allBitmaps);
           
-          // Clean up bitmaps after atlas creation
-          allBitmaps.forEach(bitmap => bitmap.close());
+          // Note: atlas.createAtlas already closes bitmaps internally
           
           atlas.applyFilters(currentTextureFilters.current);
           setTextureAtlas(atlas);
+          
           resolve(processedFrames);
         } catch (error) {
           // ... error handling remains the same ...
@@ -394,6 +437,27 @@ const UltrasoundVisualizer = ({
       }
     };
   }, [textureAtlas]);
+
+  // Handle render mode changes and sync volume settings
+  useEffect(() => {
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.setRenderMode(renderMode);
+      
+      // Always sync volume settings when switching to volume mode
+      if (renderMode === 'volume') {
+        sceneManagerRef.current.updateVolumeSettings({
+          threshold: volumeThreshold,
+          stepSize: volumeStepSize,
+          opacity: opacity,
+          brightness: brightness,
+          renderMode: volumeRenderType,
+          volumeLength: volumeLength,
+          clipBounds: volumeClipBounds,
+          clipOffset: volumeClipOffset,
+        });
+      }
+    }
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipOffset]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1029,6 +1093,12 @@ const UltrasoundVisualizer = ({
                   title="Reset to Defaults"
                   size={24}  // Increased from default size
                 />
+                <FaCube
+                  style={{ cursor: 'pointer', color: renderMode === 'volume' ? '#3498db' : 'white' }}
+                  onClick={() => setRenderMode(renderMode === 'volume' ? 'planes' : 'volume')}
+                  title={renderMode === 'volume' ? 'Switch to Planes Mode' : 'Switch to Volume Mode'}
+                  size={24}
+                />
                 <FilterToggleIcons
                   textureFilters={textureFilters}
                   onFilterChange={(newFilters) => {
@@ -1180,6 +1250,12 @@ const UltrasoundVisualizer = ({
                     title="Reset to Defaults"
                     size={24}  // Added size prop
                   />
+                  <FaCube
+                    style={{ cursor: 'pointer', color: renderMode === 'volume' ? '#3498db' : 'white' }}
+                    onClick={() => setRenderMode(renderMode === 'volume' ? 'planes' : 'volume')}
+                    title={renderMode === 'volume' ? 'Switch to Planes Mode' : 'Switch to Volume Mode'}
+                    size={24}
+                  />
                   <FilterToggleIcons
                     textureFilters={textureFilters}
                     onFilterChange={(newFilters) => {
@@ -1315,6 +1391,20 @@ const UltrasoundVisualizer = ({
         onTextureFilterChange={handleTextureFilterChange}
         isRotationLocked={isRotationLocked}
         onRotationLockChange={onRotationLockChange}
+        renderMode={renderMode}
+        setRenderMode={setRenderMode}
+        volumeThreshold={volumeThreshold}
+        setVolumeThreshold={setVolumeThreshold}
+        volumeStepSize={volumeStepSize}
+        setVolumeStepSize={setVolumeStepSize}
+        volumeRenderType={volumeRenderType}
+        setVolumeRenderType={setVolumeRenderType}
+        volumeLength={volumeLength}
+        setVolumeLength={setVolumeLength}
+        volumeClipBounds={volumeClipBounds}
+        setVolumeClipBounds={setVolumeClipBounds}
+        volumeClipOffset={volumeClipOffset}
+        setVolumeClipOffset={setVolumeClipOffset}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
