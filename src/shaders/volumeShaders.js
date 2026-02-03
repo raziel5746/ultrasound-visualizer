@@ -49,6 +49,9 @@ uniform float diffuse;
 uniform float specular;
 uniform float shininess;
 
+// Transfer function uniform
+uniform int transferFunctionType; // 0=grayscale, 1=heat, 2=cool, 3=bone, 4=copper, 5=viridis, 6=plasma, 7=rainbow
+
 varying vec3 vRayDir;
 varying vec3 vPosition;
 varying vec3 vTransformedEye;
@@ -103,10 +106,77 @@ vec3 applyLighting(vec3 baseColor, vec3 normal, vec3 viewDir, vec3 lightDir) {
     return ambientColor + diffuseColor + specularColor;
 }
 
+// Apply color map based on transfer function type
+vec3 applyColorMap(float t) {
+    t = clamp(t, 0.0, 1.0);
+    
+    if (transferFunctionType == 1) {
+        // Heat: black -> red -> yellow -> white
+        return vec3(
+            clamp(t * 3.0, 0.0, 1.0),
+            clamp(t * 3.0 - 1.0, 0.0, 1.0),
+            clamp(t * 3.0 - 2.0, 0.0, 1.0)
+        );
+    } else if (transferFunctionType == 2) {
+        // Cool: black -> blue -> cyan -> white
+        return vec3(
+            clamp(t * 3.0 - 2.0, 0.0, 1.0),
+            clamp(t * 3.0 - 1.0, 0.0, 1.0),
+            clamp(t * 3.0, 0.0, 1.0)
+        );
+    } else if (transferFunctionType == 3) {
+        // Bone: blue-tinted grayscale
+        return vec3(
+            t * 0.99,
+            t * 0.99,
+            t * 0.99 + (1.0 - t) * 0.08
+        );
+    } else if (transferFunctionType == 4) {
+        // Copper: black -> orange -> peach
+        return vec3(
+            clamp(t * 1.25, 0.0, 1.0),
+            clamp(t * 0.78, 0.0, 1.0),
+            clamp(t * 0.5, 0.0, 1.0)
+        );
+    } else if (transferFunctionType == 5) {
+        // Viridis: purple -> blue -> green -> yellow
+        vec3 c0 = vec3(0.267, 0.004, 0.329);
+        vec3 c1 = vec3(0.282, 0.140, 0.457);
+        vec3 c2 = vec3(0.127, 0.566, 0.550);
+        vec3 c3 = vec3(0.993, 0.906, 0.144);
+        if (t < 0.33) return mix(c0, c1, t * 3.0);
+        else if (t < 0.66) return mix(c1, c2, (t - 0.33) * 3.0);
+        else return mix(c2, c3, (t - 0.66) * 3.0);
+    } else if (transferFunctionType == 6) {
+        // Plasma: purple -> pink -> orange -> yellow
+        vec3 c0 = vec3(0.050, 0.030, 0.527);
+        vec3 c1 = vec3(0.798, 0.280, 0.470);
+        vec3 c2 = vec3(0.988, 0.652, 0.250);
+        vec3 c3 = vec3(0.940, 0.975, 0.131);
+        if (t < 0.33) return mix(c0, c1, t * 3.0);
+        else if (t < 0.66) return mix(c1, c2, (t - 0.33) * 3.0);
+        else return mix(c2, c3, (t - 0.66) * 3.0);
+    } else if (transferFunctionType == 7) {
+        // Rainbow
+        float h = t * 5.0;
+        vec3 c;
+        if (h < 1.0) c = vec3(1.0, h, 0.0);
+        else if (h < 2.0) c = vec3(2.0 - h, 1.0, 0.0);
+        else if (h < 3.0) c = vec3(0.0, 1.0, h - 2.0);
+        else if (h < 4.0) c = vec3(0.0, 4.0 - h, 1.0);
+        else c = vec3(h - 4.0, 0.0, 1.0);
+        return c;
+    }
+    
+    // Default: grayscale
+    return vec3(t, t, t);
+}
+
 vec4 transferFunction(float intensity) {
     float adjustedIntensity = intensity * brightness;
     float alpha = smoothstep(threshold, threshold + 0.3, adjustedIntensity) * opacity;
-    return vec4(adjustedIntensity, adjustedIntensity, adjustedIntensity, alpha);
+    vec3 color = applyColorMap(adjustedIntensity);
+    return vec4(color, alpha);
 }
 
 void main() {
@@ -175,14 +245,12 @@ void main() {
     }
     
     if (renderMode == 1) {
-        // Maximum Intensity Projection
+        // Maximum Intensity Projection with color map
         float adjusted = maxIntensity * brightness;
-        vec3 mipColor = vec3(adjusted);
+        vec3 mipColor = applyColorMap(adjusted);
         
-        // Apply lighting to MIP if enabled (use last sample position for gradient)
+        // Apply lighting to MIP if enabled
         if (lightingEnabled == 1 && maxIntensity > 0.01) {
-            // For MIP, we estimate the gradient at the brightest point
-            // This is an approximation - true MIP lighting would require storing position
             mipColor = mipColor * (ambient + diffuse * 0.5);
         }
         

@@ -393,6 +393,8 @@ const ControlPanel = ({
   setVolumeClipBounds,
   volumeLighting,
   setVolumeLighting,
+  volumeTransferFunction,
+  setVolumeTransferFunction,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -675,7 +677,7 @@ const ControlPanel = ({
                       label="Volume Length"
                       value={volumeLength}
                       min={0.2}
-                      max={3}
+                      max={10}
                       step={0.1}
                       onChange={setVolumeLength}
                       displayValue={(v) => v.toFixed(1)}
@@ -772,6 +774,38 @@ const ControlPanel = ({
                           </div>
                         </div>
                       )}
+                    </div>
+                    
+                    {/* Transfer Function / Color Map for Volume */}
+                    <div style={{ marginTop: '15px', marginBottom: '10px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                        <FaPalette style={{ marginRight: '10px' }} />
+                        Color Map
+                      </label>
+                      <select
+                        value={volumeTransferFunction || 'grayscale'}
+                        onChange={(e) => setVolumeTransferFunction(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          backgroundColor: '#333333',
+                          color: '#ffffff',
+                          border: '1px solid #404040',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="grayscale">Grayscale</option>
+                        <option value="heat">Heat (Black → Red → Yellow → White)</option>
+                        <option value="cool">Cool (Black → Blue → Cyan → White)</option>
+                        <option value="bone">Bone (Blue-tinted grayscale)</option>
+                        <option value="copper">Copper (Black → Orange → Peach)</option>
+                        <option value="viridis">Viridis (Purple → Blue → Green → Yellow)</option>
+                        <option value="plasma">Plasma (Purple → Pink → Orange → Yellow)</option>
+                        <option value="rainbow">Rainbow</option>
+                      </select>
                     </div>
                   </>
                 )}

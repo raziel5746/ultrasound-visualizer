@@ -86,6 +86,7 @@ const UltrasoundVisualizer = ({
     specular: 0.4,
     shininess: 32.0
   }); // Lighting/shading settings
+  const [volumeTransferFunction, setVolumeTransferFunction] = useState('grayscale'); // Transfer function preset
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -458,10 +459,11 @@ const UltrasoundVisualizer = ({
           volumeLength: volumeLength,
           clipBounds: volumeClipBounds,
           lighting: volumeLighting,
+          transferFunction: volumeTransferFunction,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeLighting]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeLighting, volumeTransferFunction]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1409,6 +1411,8 @@ const UltrasoundVisualizer = ({
         setVolumeClipBounds={setVolumeClipBounds}
         volumeLighting={volumeLighting}
         setVolumeLighting={setVolumeLighting}
+        volumeTransferFunction={volumeTransferFunction}
+        setVolumeTransferFunction={setVolumeTransferFunction}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

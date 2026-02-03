@@ -21,6 +21,7 @@ class VolumeRenderer {
       volumeLength: 1.0,
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
+      transferFunction: 'grayscale',
     };
   }
 
@@ -69,7 +70,8 @@ class VolumeRenderer {
         'volumeScale', 'stepSize', 'opacity', 'brightness',
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
         'clipMin', 'clipMax',
-        'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess'
+        'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
+        'transferFunctionType'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -120,6 +122,10 @@ class VolumeRenderer {
     this.material.setFloat('diffuse', lt.diffuse);
     this.material.setFloat('specular', lt.specular);
     this.material.setFloat('shininess', lt.shininess);
+    
+    // Set transfer function type
+    const tfMap = { grayscale: 0, heat: 1, cool: 2, bone: 3, copper: 4, viridis: 5, plasma: 6, rainbow: 7 };
+    this.material.setInt('transferFunctionType', tfMap[this.settings.transferFunction] || 0);
   }
 
   setStepSize(value) {
@@ -176,6 +182,11 @@ class VolumeRenderer {
 
   setLighting(lighting) {
     this.settings.lighting = { ...lighting };
+    this.updateUniforms();
+  }
+
+  setTransferFunction(tf) {
+    this.settings.transferFunction = tf;
     this.updateUniforms();
   }
 
