@@ -46,6 +46,11 @@ uniform int clipMode;   // 0 = box, 1 = sphere
 uniform vec3 sphereCenter;  // Sphere center (0-1 normalized)
 uniform float sphereRadius; // Sphere radius (0-1 normalized)
 
+// Transfer function curve controls
+uniform float gamma;        // Gamma correction (0.1-3.0, default 1.0)
+uniform float softness;     // Threshold softness (0.01-1.0, default 0.3)
+uniform float minOpacity;   // Minimum opacity for non-zero values (0-0.5)
+
 // Lighting uniforms
 uniform int lightingEnabled;
 uniform float ambient;
@@ -182,8 +187,20 @@ vec3 applyColorMap(float t) {
 }
 
 vec4 transferFunction(float intensity) {
-    float adjustedIntensity = intensity * brightness;
-    float alpha = smoothstep(threshold, threshold + 0.3, adjustedIntensity) * opacity;
+    // Apply gamma correction to intensity curve
+    float gammaIntensity = pow(intensity, gamma);
+    float adjustedIntensity = gammaIntensity * brightness;
+    
+    // Soft threshold with adjustable softness (gentler falloff)
+    float thresholdAlpha = smoothstep(threshold, threshold + softness, adjustedIntensity);
+    
+    // Add minimum opacity for values above a very low threshold
+    // This preserves low-intensity data that would otherwise be invisible
+    float preserveAlpha = intensity > 0.02 ? minOpacity : 0.0;
+    
+    // Combine: threshold-based alpha + preserved minimum
+    float alpha = max(thresholdAlpha, preserveAlpha) * opacity;
+    
     vec3 color = applyColorMap(adjustedIntensity);
     return vec4(color, alpha);
 }

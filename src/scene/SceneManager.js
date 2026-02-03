@@ -627,6 +627,10 @@ class SceneManager {
     if (settings.clipBounds !== undefined) this.volumeRenderer.setClipBounds(settings.clipBounds);
     if (settings.clipMode !== undefined) this.volumeRenderer.setClipMode(settings.clipMode);
     if (settings.sphereClip !== undefined) this.volumeRenderer.setSphereClip(settings.sphereClip);
+    if (settings.gamma !== undefined) this.volumeRenderer.setGamma(settings.gamma);
+    if (settings.softness !== undefined) this.volumeRenderer.setSoftness(settings.softness);
+    if (settings.minOpacity !== undefined) this.volumeRenderer.setMinOpacity(settings.minOpacity);
+    if (settings.preset !== undefined) return this.volumeRenderer.applyPreset(settings.preset);
     if (settings.lighting !== undefined) this.volumeRenderer.setLighting(settings.lighting);
     if (settings.transferFunction !== undefined) this.volumeRenderer.setTransferFunction(settings.transferFunction);
     if (settings.isosurface !== undefined) this.volumeRenderer.setIsosurface(settings.isosurface);
