@@ -156,8 +156,11 @@ const VolumeClipSlider = ({ label, values, onChange, isMobile }) => {
     };
   }, [isDraggingMiddle, onChange]);
   
+  // Calculate center position for the third handle
+  const centerPosition = (values[0] + values[1]) / 2;
+  
   return (
-    <div ref={containerRef} style={{ marginBottom: '12px' }}>
+    <div ref={containerRef} style={{ marginBottom: '12px', paddingBottom: '32px', position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
         <span style={{ fontSize: isMobile ? '12px' : '13px', color: '#aaa' }}>{label}</span>
         <span style={{ fontSize: '11px', color: '#666' }}>
@@ -239,6 +242,36 @@ const VolumeClipSlider = ({ label, values, onChange, isMobile }) => {
           </div>
         )}
       />
+      {/* Third center handle below the slider for easier range dragging */}
+      <div
+        onMouseDown={handleMiddleMouseDown}
+        onTouchStart={handleMiddleMouseDown}
+        style={{
+          position: 'absolute',
+          left: `${centerPosition * 100}%`,
+          transform: 'translate(-50%, 50%)',
+          top: '40px',
+          width: '28px',
+          height: '20px',
+          borderRadius: '4px',
+          backgroundColor: isDraggingMiddle ? '#3498db' : '#444',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          boxShadow: '0px 1px 4px rgba(0,0,0,0.4)',
+          border: '1px solid #555',
+          cursor: 'grab',
+          touchAction: 'none',
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          gap: '3px',
+        }}>
+          <div style={{ width: '2px', height: '10px', backgroundColor: isDraggingMiddle ? '#fff' : '#888' }} />
+          <div style={{ width: '2px', height: '10px', backgroundColor: isDraggingMiddle ? '#fff' : '#888' }} />
+        </div>
+      </div>
     </div>
   );
 };
