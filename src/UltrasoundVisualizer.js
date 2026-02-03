@@ -79,9 +79,19 @@ const UltrasoundVisualizer = ({
     yMin: 0, yMax: 1,
     zMin: 0, zMax: 1
   }); // Normalized clipping bounds (0-1)
-  const [volumeClipOffset, setVolumeClipOffset] = useState({
-    x: 0, y: 0, z: 0
-  }); // Offset for moving the clipped region (-1 to 1)
+  const [volumeLighting, setVolumeLighting] = useState({
+    enabled: false,
+    ambient: 0.3,
+    diffuse: 0.7,
+    specular: 0.4,
+    shininess: 32.0
+  }); // Lighting/shading settings
+  const [volumeTransferFunction, setVolumeTransferFunction] = useState('grayscale'); // Transfer function preset
+  const [volumeIsosurface, setVolumeIsosurface] = useState({
+    level: 0.3,       // Isosurface intensity level (0-1)
+    smoothness: 1.0,  // Step multiplier for smoother surfaces (0.5-2)
+    opacity: 1.0      // Surface opacity (0-1)
+  });
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -453,11 +463,13 @@ const UltrasoundVisualizer = ({
           renderMode: volumeRenderType,
           volumeLength: volumeLength,
           clipBounds: volumeClipBounds,
-          clipOffset: volumeClipOffset,
+          lighting: volumeLighting,
+          transferFunction: volumeTransferFunction,
+          isosurface: volumeIsosurface,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipOffset]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeLighting, volumeTransferFunction, volumeIsosurface]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1403,8 +1415,12 @@ const UltrasoundVisualizer = ({
         setVolumeLength={setVolumeLength}
         volumeClipBounds={volumeClipBounds}
         setVolumeClipBounds={setVolumeClipBounds}
-        volumeClipOffset={volumeClipOffset}
-        setVolumeClipOffset={setVolumeClipOffset}
+        volumeLighting={volumeLighting}
+        setVolumeLighting={setVolumeLighting}
+        volumeTransferFunction={volumeTransferFunction}
+        setVolumeTransferFunction={setVolumeTransferFunction}
+        volumeIsosurface={volumeIsosurface}
+        setVolumeIsosurface={setVolumeIsosurface}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

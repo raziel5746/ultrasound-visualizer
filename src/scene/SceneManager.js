@@ -625,7 +625,9 @@ class SceneManager {
     if (settings.renderMode !== undefined) this.volumeRenderer.setRenderMode(settings.renderMode);
     if (settings.volumeLength !== undefined) this.volumeRenderer.setVolumeLength(settings.volumeLength);
     if (settings.clipBounds !== undefined) this.volumeRenderer.setClipBounds(settings.clipBounds);
-    if (settings.clipOffset !== undefined) this.volumeRenderer.setClipOffset(settings.clipOffset);
+    if (settings.lighting !== undefined) this.volumeRenderer.setLighting(settings.lighting);
+    if (settings.transferFunction !== undefined) this.volumeRenderer.setTransferFunction(settings.transferFunction);
+    if (settings.isosurface !== undefined) this.volumeRenderer.setIsosurface(settings.isosurface);
   }
 
   updateVolumeCameraPosition() {

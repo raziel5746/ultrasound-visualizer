@@ -20,7 +20,9 @@ class VolumeRenderer {
       renderMode: 0, // 0 = accumulate, 1 = MIP
       volumeLength: 1.0,
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
-      clipOffset: { x: 0, y: 0, z: 0 },
+      lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
+      transferFunction: 'grayscale',
+      isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
     };
   }
 
@@ -68,7 +70,10 @@ class VolumeRenderer {
         'world', 'worldViewProjection', 'cameraPosition',
         'volumeScale', 'stepSize', 'opacity', 'brightness',
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
-        'clipMin', 'clipMax', 'clipOffset'
+        'clipMin', 'clipMax',
+        'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
+        'transferFunctionType',
+        'isoLevel', 'isoSmoothness', 'isoOpacity'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -112,9 +117,23 @@ class VolumeRenderer {
     this.material.setVector3('clipMin', new BABYLON.Vector3(cb.xMin, cb.yMin, cb.zMin));
     this.material.setVector3('clipMax', new BABYLON.Vector3(cb.xMax, cb.yMax, cb.zMax));
     
-    // Set clip offset
-    const co = this.settings.clipOffset;
-    this.material.setVector3('clipOffset', new BABYLON.Vector3(co.x, co.y, co.z));
+    // Set lighting
+    const lt = this.settings.lighting;
+    this.material.setInt('lightingEnabled', lt.enabled ? 1 : 0);
+    this.material.setFloat('ambient', lt.ambient);
+    this.material.setFloat('diffuse', lt.diffuse);
+    this.material.setFloat('specular', lt.specular);
+    this.material.setFloat('shininess', lt.shininess);
+    
+    // Set transfer function type
+    const tfMap = { grayscale: 0, heat: 1, cool: 2, bone: 3, copper: 4, viridis: 5, plasma: 6, rainbow: 7 };
+    this.material.setInt('transferFunctionType', tfMap[this.settings.transferFunction] || 0);
+    
+    // Set isosurface parameters
+    const iso = this.settings.isosurface;
+    this.material.setFloat('isoLevel', iso.level);
+    this.material.setFloat('isoSmoothness', iso.smoothness);
+    this.material.setFloat('isoOpacity', iso.opacity);
   }
 
   setStepSize(value) {
@@ -169,8 +188,18 @@ class VolumeRenderer {
     this.updateUniforms();
   }
 
-  setClipOffset(offset) {
-    this.settings.clipOffset = { ...offset };
+  setLighting(lighting) {
+    this.settings.lighting = { ...lighting };
+    this.updateUniforms();
+  }
+
+  setTransferFunction(tf) {
+    this.settings.transferFunction = tf;
+    this.updateUniforms();
+  }
+
+  setIsosurface(iso) {
+    this.settings.isosurface = { ...iso };
     this.updateUniforms();
   }
 
