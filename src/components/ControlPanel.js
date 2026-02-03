@@ -436,6 +436,8 @@ const ControlPanel = ({
   setVolumeSphereClip,
   volumeCurve,
   setVolumeCurve,
+  volumeGradientOpacity,
+  setVolumeGradientOpacity,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -1093,6 +1095,94 @@ const ControlPanel = ({
                           style={{ width: '100%' }}
                         />
                       </div>
+                    </div>
+                    
+                    {/* Gradient Opacity Controls */}
+                    <div style={{ marginTop: '15px', marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          <FaAdjust style={{ marginRight: '10px' }} />
+                          Gradient Opacity (Edge Enhancement)
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={volumeGradientOpacity?.enabled || false}
+                          onChange={(e) => setVolumeGradientOpacity && setVolumeGradientOpacity(prev => ({...prev, enabled: e.target.checked}))}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </label>
+                      
+                      {volumeGradientOpacity?.enabled && (
+                        <div style={{ paddingLeft: '5px' }}>
+                          {/* Scale/Amplifier slider - most important for internal structures */}
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Scale (amplify detection)</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeGradientOpacity?.scale || 10.0).toFixed(1)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1"
+                              max="50"
+                              step="1"
+                              value={volumeGradientOpacity?.scale || 10.0}
+                              onChange={(e) => setVolumeGradientOpacity && setVolumeGradientOpacity(prev => ({...prev, scale: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Strength slider */}
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Strength</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeGradientOpacity?.strength || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={volumeGradientOpacity?.strength || 0.5}
+                              onChange={(e) => setVolumeGradientOpacity && setVolumeGradientOpacity(prev => ({...prev, strength: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Min gradient slider */}
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Min Threshold</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeGradientOpacity?.min || 0.02).toFixed(3)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="0.2"
+                              step="0.005"
+                              value={volumeGradientOpacity?.min || 0.02}
+                              onChange={(e) => setVolumeGradientOpacity && setVolumeGradientOpacity(prev => ({...prev, min: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Max gradient slider */}
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Max Threshold</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeGradientOpacity?.max || 0.15).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.05"
+                              max="0.5"
+                              step="0.01"
+                              value={volumeGradientOpacity?.max || 0.15}
+                              onChange={(e) => setVolumeGradientOpacity && setVolumeGradientOpacity(prev => ({...prev, max: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                 </ControlGroup>
               )}

@@ -630,6 +630,7 @@ class SceneManager {
     if (settings.gamma !== undefined) this.volumeRenderer.setGamma(settings.gamma);
     if (settings.softness !== undefined) this.volumeRenderer.setSoftness(settings.softness);
     if (settings.minOpacity !== undefined) this.volumeRenderer.setMinOpacity(settings.minOpacity);
+    if (settings.gradientOpacity !== undefined) this.volumeRenderer.setGradientOpacity(settings.gradientOpacity);
     if (settings.preset !== undefined) return this.volumeRenderer.applyPreset(settings.preset);
     if (settings.lighting !== undefined) this.volumeRenderer.setLighting(settings.lighting);
     if (settings.transferFunction !== undefined) this.volumeRenderer.setTransferFunction(settings.transferFunction);

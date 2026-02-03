@@ -26,6 +26,14 @@ class VolumeRenderer {
       gamma: 1.0,        // 0.1-3.0, default 1.0
       softness: 0.3,     // 0.01-1.0, threshold softness
       minOpacity: 0.0,   // 0-0.5, preserves low-intensity data
+      // Gradient opacity settings
+      gradientOpacity: {
+        enabled: false,
+        strength: 0.5,   // How much gradient affects opacity (0-1)
+        min: 0.02,       // Min gradient threshold (lowered for internal structures)
+        max: 0.15,       // Max gradient for full effect (lowered for internal structures)
+        scale: 10.0      // Amplifier for gradient detection (1-50)
+      },
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
       transferFunction: 'grayscale',
       isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
@@ -79,6 +87,7 @@ class VolumeRenderer {
         'clipMin', 'clipMax',
         'clipMode', 'sphereCenter', 'sphereRadius',
         'gamma', 'softness', 'minOpacity',
+        'gradientOpacityEnabled', 'gradientOpacityStrength', 'gradientOpacityMin', 'gradientOpacityMax', 'gradientScale',
         'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
         'transferFunctionType',
         'isoLevel', 'isoSmoothness', 'isoOpacity'
@@ -135,6 +144,14 @@ class VolumeRenderer {
     this.material.setFloat('gamma', this.settings.gamma);
     this.material.setFloat('softness', this.settings.softness);
     this.material.setFloat('minOpacity', this.settings.minOpacity);
+    
+    // Set gradient opacity
+    const go = this.settings.gradientOpacity;
+    this.material.setFloat('gradientOpacityEnabled', go.enabled ? 1.0 : 0.0);
+    this.material.setFloat('gradientOpacityStrength', go.strength);
+    this.material.setFloat('gradientOpacityMin', go.min);
+    this.material.setFloat('gradientOpacityMax', go.max);
+    this.material.setFloat('gradientScale', go.scale);
     
     // Set lighting
     const lt = this.settings.lighting;
@@ -229,6 +246,11 @@ class VolumeRenderer {
 
   setMinOpacity(minOpacity) {
     this.settings.minOpacity = minOpacity;
+    this.updateUniforms();
+  }
+
+  setGradientOpacity(gradientOpacity) {
+    this.settings.gradientOpacity = { ...this.settings.gradientOpacity, ...gradientOpacity };
     this.updateUniforms();
   }
 

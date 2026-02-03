@@ -51,6 +51,13 @@ uniform float gamma;        // Gamma correction (0.1-3.0, default 1.0)
 uniform float softness;     // Threshold softness (0.01-1.0, default 0.3)
 uniform float minOpacity;   // Minimum opacity for non-zero values (0-0.5)
 
+// Gradient opacity controls
+uniform float gradientOpacityEnabled; // 0 = disabled, 1 = enabled
+uniform float gradientOpacityStrength; // How much gradient affects opacity (0-1)
+uniform float gradientOpacityMin;      // Min gradient threshold (0-1)
+uniform float gradientOpacityMax;      // Max gradient for full effect (0-1)
+uniform float gradientScale;           // Multiplier to amplify gradient detection (1-50)
+
 // Lighting uniforms
 uniform int lightingEnabled;
 uniform float ambient;
@@ -86,6 +93,16 @@ vec2 intersectBox(vec3 orig, vec3 dir) {
 // Compute gradient (normal) using central differences
 vec3 computeGradient(vec3 pos) {
     float h = 1.0 / volumeDimensions.x; // Sample offset
+    float dx = texture(volumeTexture, pos + vec3(h, 0.0, 0.0)).r - texture(volumeTexture, pos - vec3(h, 0.0, 0.0)).r;
+    float dy = texture(volumeTexture, pos + vec3(0.0, h, 0.0)).r - texture(volumeTexture, pos - vec3(0.0, h, 0.0)).r;
+    float dz = texture(volumeTexture, pos + vec3(0.0, 0.0, h)).r - texture(volumeTexture, pos - vec3(0.0, 0.0, h)).r;
+    return vec3(dx, dy, dz);
+}
+
+// Compute fine gradient for internal texture detection (smaller step, multi-scale)
+vec3 computeFineGradient(vec3 pos) {
+    // Use smaller step for finer detail detection
+    float h = 0.5 / volumeDimensions.x;
     float dx = texture(volumeTexture, pos + vec3(h, 0.0, 0.0)).r - texture(volumeTexture, pos - vec3(h, 0.0, 0.0)).r;
     float dy = texture(volumeTexture, pos + vec3(0.0, h, 0.0)).r - texture(volumeTexture, pos - vec3(0.0, h, 0.0)).r;
     float dz = texture(volumeTexture, pos + vec3(0.0, 0.0, h)).r - texture(volumeTexture, pos - vec3(0.0, 0.0, h)).r;
@@ -186,7 +203,7 @@ vec3 applyColorMap(float t) {
     return vec3(t, t, t);
 }
 
-vec4 transferFunction(float intensity) {
+vec4 transferFunction(float intensity, float gradientMagnitude) {
     // Apply gamma correction to intensity curve
     float gammaIntensity = pow(intensity, gamma);
     float adjustedIntensity = gammaIntensity * brightness;
@@ -199,10 +216,22 @@ vec4 transferFunction(float intensity) {
     float preserveAlpha = intensity > 0.02 ? minOpacity : 0.0;
     
     // Combine: threshold-based alpha + preserved minimum
-    float alpha = max(thresholdAlpha, preserveAlpha) * opacity;
+    float scalarAlpha = max(thresholdAlpha, preserveAlpha);
+    
+    // Apply gradient opacity if enabled
+    float finalAlpha = scalarAlpha;
+    if (gradientOpacityEnabled > 0.5) {
+        // Amplify gradient magnitude for internal structure detection
+        float amplifiedGradient = gradientMagnitude * gradientScale;
+        // Map amplified gradient to opacity factor
+        float gradientFactor = smoothstep(gradientOpacityMin, gradientOpacityMax, amplifiedGradient);
+        // Blend scalar opacity with gradient-enhanced opacity
+        // This makes edges/boundaries more visible even in dark areas
+        finalAlpha = mix(scalarAlpha, max(scalarAlpha, gradientFactor), gradientOpacityStrength);
+    }
     
     vec3 color = applyColorMap(adjustedIntensity);
-    return vec4(color, alpha);
+    return vec4(color, finalAlpha * opacity);
 }
 
 void main() {
@@ -289,11 +318,14 @@ void main() {
             prevIntensity = intensity;
         } else {
             // Front-to-back compositing (Accumulate mode)
-            vec4 sampleColor = transferFunction(intensity);
+            // Compute gradient for both gradient opacity and lighting
+            vec3 gradient = computeGradient(samplePos);
+            float gradientMagnitude = length(gradient);
+            
+            vec4 sampleColor = transferFunction(intensity, gradientMagnitude);
             
             // Apply lighting if enabled
             if (lightingEnabled == 1 && sampleColor.a > 0.01) {
-                vec3 gradient = computeGradient(samplePos);
                 vec3 viewDir = -rayDir;
                 vec3 lightDir = viewDir; // Headlight: light from camera direction
                 sampleColor.rgb = applyLighting(sampleColor.rgb, gradient, viewDir, lightDir);

@@ -104,6 +104,14 @@ const UltrasoundVisualizer = ({
     minOpacity: 0.0,  // Min opacity for low-intensity preservation (0-0.5)
     preset: 'default' // Preset name: default, fullRange, highContrast, softTissue
   });
+  // Gradient opacity - makes edges/boundaries visible based on gradient magnitude
+  const [volumeGradientOpacity, setVolumeGradientOpacity] = useState({
+    enabled: false,
+    strength: 0.5,    // How much gradient affects opacity (0-1)
+    min: 0.02,        // Min gradient threshold (lowered for internal structures)
+    max: 0.15,        // Max gradient for full effect
+    scale: 10.0       // Amplifier for gradient detection (1-50)
+  });
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -480,13 +488,14 @@ const UltrasoundVisualizer = ({
           gamma: volumeCurve.gamma,
           softness: volumeCurve.softness,
           minOpacity: volumeCurve.minOpacity,
+          gradientOpacity: volumeGradientOpacity,
           lighting: volumeLighting,
           transferFunction: volumeTransferFunction,
           isosurface: volumeIsosurface,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeGradientOpacity, volumeLighting, volumeTransferFunction, volumeIsosurface]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1438,6 +1447,8 @@ const UltrasoundVisualizer = ({
         setVolumeSphereClip={setVolumeSphereClip}
         volumeCurve={volumeCurve}
         setVolumeCurve={setVolumeCurve}
+        volumeGradientOpacity={volumeGradientOpacity}
+        setVolumeGradientOpacity={setVolumeGradientOpacity}
         volumeLighting={volumeLighting}
         setVolumeLighting={setVolumeLighting}
         volumeTransferFunction={volumeTransferFunction}
