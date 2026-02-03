@@ -79,6 +79,11 @@ const UltrasoundVisualizer = ({
     yMin: 0, yMax: 1,
     zMin: 0, zMax: 1
   }); // Normalized clipping bounds (0-1)
+  const [volumeClipMode, setVolumeClipMode] = useState('cube'); // 'cube' or 'sphere'
+  const [volumeSphereClip, setVolumeSphereClip] = useState({
+    x: 0.5, y: 0.5, z: 0.5,  // Center position (0-1 normalized)
+    diameter: 0.5            // Diameter (0-2 range)
+  }); // Sphere clipping parameters
   const [volumeLighting, setVolumeLighting] = useState({
     enabled: false,
     ambient: 0.3,
@@ -463,13 +468,15 @@ const UltrasoundVisualizer = ({
           renderMode: volumeRenderType,
           volumeLength: volumeLength,
           clipBounds: volumeClipBounds,
+          clipMode: volumeClipMode,
+          sphereClip: volumeSphereClip,
           lighting: volumeLighting,
           transferFunction: volumeTransferFunction,
           isosurface: volumeIsosurface,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeLighting, volumeTransferFunction, volumeIsosurface]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeLighting, volumeTransferFunction, volumeIsosurface]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1415,6 +1422,10 @@ const UltrasoundVisualizer = ({
         setVolumeLength={setVolumeLength}
         volumeClipBounds={volumeClipBounds}
         setVolumeClipBounds={setVolumeClipBounds}
+        volumeClipMode={volumeClipMode}
+        setVolumeClipMode={setVolumeClipMode}
+        volumeSphereClip={volumeSphereClip}
+        setVolumeSphereClip={setVolumeSphereClip}
         volumeLighting={volumeLighting}
         setVolumeLighting={setVolumeLighting}
         volumeTransferFunction={volumeTransferFunction}

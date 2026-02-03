@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaLock, FaLockOpen, FaCube } from 'react-icons/fa';
+import { FaLayerGroup, FaImages, FaEye, FaSun, FaPalette, FaArrowsAltH, FaLightbulb, FaAdjust, FaLock, FaLockOpen, FaCube, FaCircle } from 'react-icons/fa';
 import * as BABYLON from '@babylonjs/core';
 import { Range, getTrackBackground } from 'react-range';
 import { getColorMapNames, ColorMaps } from '../utils/ColorMaps';
@@ -156,8 +156,11 @@ const VolumeClipSlider = ({ label, values, onChange, isMobile }) => {
     };
   }, [isDraggingMiddle, onChange]);
   
+  // Calculate center position for the third handle
+  const centerPosition = (values[0] + values[1]) / 2;
+  
   return (
-    <div ref={containerRef} style={{ marginBottom: '12px' }}>
+    <div ref={containerRef} style={{ marginBottom: '12px', paddingBottom: '32px', position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
         <span style={{ fontSize: isMobile ? '12px' : '13px', color: '#aaa' }}>{label}</span>
         <span style={{ fontSize: '11px', color: '#666' }}>
@@ -239,6 +242,36 @@ const VolumeClipSlider = ({ label, values, onChange, isMobile }) => {
           </div>
         )}
       />
+      {/* Third center handle below the slider for easier range dragging */}
+      <div
+        onMouseDown={handleMiddleMouseDown}
+        onTouchStart={handleMiddleMouseDown}
+        style={{
+          position: 'absolute',
+          left: `${centerPosition * 100}%`,
+          transform: 'translate(-50%, 50%)',
+          top: '40px',
+          width: '28px',
+          height: '20px',
+          borderRadius: '4px',
+          backgroundColor: isDraggingMiddle ? '#3498db' : '#444',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          boxShadow: '0px 1px 4px rgba(0,0,0,0.4)',
+          border: '1px solid #555',
+          cursor: 'grab',
+          touchAction: 'none',
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          gap: '3px',
+        }}>
+          <div style={{ width: '2px', height: '10px', backgroundColor: isDraggingMiddle ? '#fff' : '#888' }} />
+          <div style={{ width: '2px', height: '10px', backgroundColor: isDraggingMiddle ? '#fff' : '#888' }} />
+        </div>
+      </div>
     </div>
   );
 };
@@ -397,6 +430,10 @@ const ControlPanel = ({
   setVolumeTransferFunction,
   volumeIsosurface,
   setVolumeIsosurface,
+  volumeClipMode,
+  setVolumeClipMode,
+  volumeSphereClip,
+  setVolumeSphereClip,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -727,12 +764,54 @@ const ControlPanel = ({
                       displayValue={(v) => v.toFixed(1)}
                       isMobile={isMobile}
                     />
-                    {/* Volume Clipping Controls - Dual-handle sliders with draggable middle */}
-                    <div style={{ marginTop: '10px', marginBottom: '10px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                        <FaCube style={{ marginRight: '10px' }} />
-                        Volume Clipping
-                      </label>
+                  </>
+                )}
+              </ControlGroup>
+              
+              {/* Volume Clipping Controls - Separate container */}
+              {renderMode === 'volume' && setVolumeClipBounds && (
+                <ControlGroup isMobile={isMobile} style={{ marginTop: '15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '500' }}>Volume Clipping</span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div
+                        onClick={() => setVolumeClipMode && setVolumeClipMode('cube')}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          backgroundColor: (volumeClipMode || 'cube') === 'cube' ? '#3498db' : '#333',
+                          border: (volumeClipMode || 'cube') === 'cube' ? '1px solid #3498db' : '1px solid #555',
+                          display: 'flex',
+                          alignItems: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title="Box Clipping"
+                      >
+                        <FaCube style={{ fontSize: '14px' }} />
+                      </div>
+                      <div
+                        onClick={() => setVolumeClipMode && setVolumeClipMode('sphere')}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          backgroundColor: volumeClipMode === 'sphere' ? '#3498db' : '#333',
+                          border: volumeClipMode === 'sphere' ? '1px solid #3498db' : '1px solid #555',
+                          display: 'flex',
+                          alignItems: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title="Sphere Clipping"
+                      >
+                        <FaCircle style={{ fontSize: '14px' }} />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Box Clipping Controls */}
+                  {(volumeClipMode || 'cube') === 'cube' && (
+                    <>
                       <VolumeClipSlider
                         label="X Axis"
                         axis="x"
@@ -753,10 +832,83 @@ const ControlPanel = ({
                         onChange={([min, max]) => setVolumeClipBounds(prev => ({...prev, zMin: min, zMax: max}))}
                         isMobile={isMobile}
                       />
-                    </div>
+                    </>
+                  )}
+                  
+                  {/* Sphere Clipping Controls */}
+                  {volumeClipMode === 'sphere' && (
+                    <>
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>X Position</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeSphereClip?.x || 0.5).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={volumeSphereClip?.x || 0.5}
+                          onChange={(e) => setVolumeSphereClip && setVolumeSphereClip(prev => ({...prev, x: parseFloat(e.target.value)}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>Y Position</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeSphereClip?.y || 0.5).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={volumeSphereClip?.y || 0.5}
+                          onChange={(e) => setVolumeSphereClip && setVolumeSphereClip(prev => ({...prev, y: parseFloat(e.target.value)}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>Z Position</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeSphereClip?.z || 0.5).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={volumeSphereClip?.z || 0.5}
+                          onChange={(e) => setVolumeSphereClip && setVolumeSphereClip(prev => ({...prev, z: parseFloat(e.target.value)}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: '#aaa' }}>Diameter</span>
+                          <span style={{ fontSize: '11px', color: '#666' }}>{(volumeSphereClip?.diameter || 0.5).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.05"
+                          max="2"
+                          step="0.01"
+                          value={volumeSphereClip?.diameter || 0.5}
+                          onChange={(e) => setVolumeSphereClip && setVolumeSphereClip(prev => ({...prev, diameter: parseFloat(e.target.value)}))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </ControlGroup>
+              )}
+              
+              {/* Volume Lighting/Shading and Transfer Function continue in same flow */}
+              {renderMode === 'volume' && setVolumeThreshold && (
+                <ControlGroup isMobile={isMobile} style={{ marginTop: '15px' }}>
                     
                     {/* Volume Lighting/Shading Controls */}
-                    <div style={{ marginTop: '15px', marginBottom: '10px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
                           <FaLightbulb style={{ marginRight: '10px' }} />
@@ -821,7 +973,7 @@ const ControlPanel = ({
                     </div>
                     
                     {/* Transfer Function / Color Map for Volume */}
-                    <div style={{ marginTop: '15px', marginBottom: '10px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+                    <div style={{ marginTop: '15px', marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                         <FaPalette style={{ marginRight: '10px' }} />
                         Color Map
@@ -851,74 +1003,73 @@ const ControlPanel = ({
                         <option value="rainbow">Rainbow</option>
                       </select>
                     </div>
-                  </>
-                )}
+                </ControlGroup>
+              )}
                 
-                {/* Color Map - hide in volume mode */}
-                {renderMode !== 'volume' && (
-                  <>
-                    <div style={{ marginBottom: '15px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                        <FaAdjust style={{ marginRight: '10px' }} />
-                        Color Map:
-                      </label>
-                      <select 
-                        value={colorMap} 
-                        onChange={(e) => {
-                          const newColorMap = e.target.value;
-                          setColorMap(newColorMap);
-                          setColorMapParams(ColorMaps[newColorMap]?.defaultParams || {});
-                        }}
-                        style={{ 
-                          width: '100%', 
-                          padding: '8px 10px',
-                          backgroundColor: '#333333',
-                          color: '#ffffff',
-                          border: '1px solid #404040',
-                          borderRadius: '6px',
-                          marginLeft: 0,
-                          fontSize: isMobile ? '14px' : '16px',
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'border-color 0.2s ease',
-                          ':hover': {
-                            borderColor: '#3498db'
-                          }
-                        }}
-                      >
-                        {colorMaps.map((map) => (
-                          <option key={map.key} value={map.key}>
-                            {map.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+              {/* Color Map - hide in volume mode */}
+              {renderMode !== 'volume' && (
+                <ControlGroup isMobile={isMobile} style={{ marginTop: '15px' }}>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                      <FaAdjust style={{ marginRight: '10px' }} />
+                      Color Map:
+                    </label>
+                    <select 
+                      value={colorMap} 
+                      onChange={(e) => {
+                        const newColorMap = e.target.value;
+                        setColorMap(newColorMap);
+                        setColorMapParams(ColorMaps[newColorMap]?.defaultParams || {});
+                      }}
+                      style={{ 
+                        width: '100%', 
+                        padding: '8px 10px',
+                        backgroundColor: '#333333',
+                        color: '#ffffff',
+                        border: '1px solid #404040',
+                        borderRadius: '6px',
+                        marginLeft: 0,
+                        fontSize: isMobile ? '14px' : '16px',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        transition: 'border-color 0.2s ease',
+                        ':hover': {
+                          borderColor: '#3498db'
+                        }
+                      }}
+                    >
+                      {colorMaps.map((map) => (
+                        <option key={map.key} value={map.key}>
+                          {map.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                    {/* Color Map Parameters */}
-                    {hasParams && (
-                      <div style={{ marginTop: '10px' }}>
-                        {Object.entries(currentColorMap.defaultParams).map(([key, defaultValue]) => (
-                          <ControlItem
-                            key={key}
-                            label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                            value={colorMapParams[key] || defaultValue}
-                            min={0}
-                            max={key.includes('Offset') ? 2 : 3}
-                            step={0.1}
-                            onChange={(value) => {
-                              setColorMapParams({
-                                ...colorMapParams,
-                                [key]: value
-                              });
-                            }}
-                            displayValue={(v) => v.toFixed(2)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </ControlGroup>
+                  {/* Color Map Parameters */}
+                  {hasParams && (
+                    <div style={{ marginTop: '10px' }}>
+                      {Object.entries(currentColorMap.defaultParams).map(([key, defaultValue]) => (
+                        <ControlItem
+                          key={key}
+                          label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                          value={colorMapParams[key] || defaultValue}
+                          min={0}
+                          max={key.includes('Offset') ? 2 : 3}
+                          step={0.1}
+                          onChange={(value) => {
+                            setColorMapParams({
+                              ...colorMapParams,
+                              [key]: value
+                            });
+                          }}
+                          displayValue={(v) => v.toFixed(2)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ControlGroup>
+              )}
             </div>
 
             {/* Right column */}

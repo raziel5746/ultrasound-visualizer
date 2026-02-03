@@ -20,6 +20,8 @@ class VolumeRenderer {
       renderMode: 0, // 0 = accumulate, 1 = MIP
       volumeLength: 1.0,
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
+      clipMode: 'cube', // 'cube' or 'sphere'
+      sphereClip: { x: 0.5, y: 0.5, z: 0.5, diameter: 0.5 },
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
       transferFunction: 'grayscale',
       isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
@@ -71,6 +73,7 @@ class VolumeRenderer {
         'volumeScale', 'stepSize', 'opacity', 'brightness',
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
         'clipMin', 'clipMax',
+        'clipMode', 'sphereCenter', 'sphereRadius',
         'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
         'transferFunctionType',
         'isoLevel', 'isoSmoothness', 'isoOpacity'
@@ -116,6 +119,12 @@ class VolumeRenderer {
     const cb = this.settings.clipBounds;
     this.material.setVector3('clipMin', new BABYLON.Vector3(cb.xMin, cb.yMin, cb.zMin));
     this.material.setVector3('clipMax', new BABYLON.Vector3(cb.xMax, cb.yMax, cb.zMax));
+    
+    // Set clip mode and sphere clipping
+    this.material.setInt('clipMode', this.settings.clipMode === 'sphere' ? 1 : 0);
+    const sc = this.settings.sphereClip;
+    this.material.setVector3('sphereCenter', new BABYLON.Vector3(sc.x, sc.y, sc.z));
+    this.material.setFloat('sphereRadius', sc.diameter / 2.0);
     
     // Set lighting
     const lt = this.settings.lighting;
@@ -185,6 +194,16 @@ class VolumeRenderer {
 
   setClipBounds(bounds) {
     this.settings.clipBounds = { ...bounds };
+    this.updateUniforms();
+  }
+
+  setClipMode(mode) {
+    this.settings.clipMode = mode;
+    this.updateUniforms();
+  }
+
+  setSphereClip(sphereClip) {
+    this.settings.sphereClip = { ...sphereClip };
     this.updateUniforms();
   }
 
