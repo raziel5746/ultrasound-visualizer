@@ -66,6 +66,18 @@ uniform float isoLevel;      // Isosurface intensity level
 uniform float isoSmoothness; // Step multiplier for smoother surfaces
 uniform float isoOpacity;    // Surface opacity
 
+// Structure Tensor visualization
+uniform float structureTensorEnabled;  // 0 = disabled, 1 = enabled
+uniform float structureTensorStrength; // Blend strength (0-1)
+uniform int structureTensorMode;       // 0 = coherence, 1 = orientation, 2 = anisotropy
+
+// Cinematic Rendering
+uniform float cinematicEnabled;       // 0 = disabled, 1 = enabled
+uniform float cinematicScattering;    // Scattering coefficient (0-2)
+uniform float cinematicAbsorption;    // Absorption coefficient (0-2)
+uniform float cinematicShadowStrength; // Shadow intensity (0-1)
+uniform int cinematicSamples;         // Number of shadow samples (4-32)
+
 varying vec3 vRayDir;
 varying vec3 vPosition;
 varying vec3 vTransformedEye;
@@ -90,6 +102,116 @@ vec3 computeGradient(vec3 pos) {
     float dy = texture(volumeTexture, pos + vec3(0.0, h, 0.0)).r - texture(volumeTexture, pos - vec3(0.0, h, 0.0)).r;
     float dz = texture(volumeTexture, pos + vec3(0.0, 0.0, h)).r - texture(volumeTexture, pos - vec3(0.0, 0.0, h)).r;
     return vec3(dx, dy, dz);
+}
+
+// Structure Tensor: Compute local structure properties
+// Returns: x = coherence (0-1), y = anisotropy (0-1), z = dominant orientation angle
+vec3 computeStructureTensor(vec3 pos) {
+    float h = 1.5 / volumeDimensions.x;
+    
+    // Compute gradient
+    vec3 grad = computeGradient(pos);
+    
+    // Structure tensor components (outer product of gradient)
+    // S = [Ixx Ixy Ixz]
+    //     [Ixy Iyy Iyz]
+    //     [Ixz Iyz Izz]
+    float Ixx = grad.x * grad.x;
+    float Iyy = grad.y * grad.y;
+    float Izz = grad.z * grad.z;
+    float Ixy = grad.x * grad.y;
+    float Ixz = grad.x * grad.z;
+    float Iyz = grad.y * grad.z;
+    
+    // Average over small neighborhood for robustness
+    for (float i = -1.0; i <= 1.0; i += 2.0) {
+        for (float j = -1.0; j <= 1.0; j += 2.0) {
+            vec3 offset = vec3(i, j, 0.0) * h;
+            vec3 g = computeGradient(pos + offset);
+            Ixx += g.x * g.x;
+            Iyy += g.y * g.y;
+            Izz += g.z * g.z;
+            Ixy += g.x * g.y;
+        }
+    }
+    Ixx /= 5.0; Iyy /= 5.0; Izz /= 5.0; Ixy /= 5.0;
+    
+    // Eigenvalue analysis for 2D (XY plane) - simplified
+    float trace = Ixx + Iyy;
+    float det = Ixx * Iyy - Ixy * Ixy;
+    float disc = sqrt(max(trace * trace - 4.0 * det, 0.0));
+    
+    float lambda1 = (trace + disc) / 2.0;
+    float lambda2 = (trace - disc) / 2.0;
+    
+    // Coherence: how aligned is the local structure
+    float coherence = (lambda1 - lambda2) / (lambda1 + lambda2 + 0.0001);
+    
+    // Anisotropy: ratio of eigenvalues
+    float anisotropy = 1.0 - lambda2 / (lambda1 + 0.0001);
+    
+    // Dominant orientation angle
+    float angle = atan(2.0 * Ixy, Ixx - Iyy) / 2.0;
+    
+    return vec3(coherence, anisotropy, angle);
+}
+
+// Map structure tensor to color
+vec3 structureTensorToColor(vec3 tensorInfo, int mode) {
+    float coherence = tensorInfo.x;
+    float anisotropy = tensorInfo.y;
+    float angle = tensorInfo.z;
+    
+    if (mode == 0) {
+        // Coherence mode: blue (random) to red (coherent)
+        return mix(vec3(0.2, 0.2, 0.8), vec3(1.0, 0.2, 0.2), coherence);
+    } else if (mode == 1) {
+        // Orientation mode: HSV color wheel based on angle
+        float hue = (angle / 3.14159 + 1.0) / 2.0; // Normalize to 0-1
+        vec3 c = vec3(hue, 0.8, 0.9);
+        // HSV to RGB conversion
+        vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+        return c.z * mix(vec3(1.0), rgb, c.y);
+    } else {
+        // Anisotropy mode: dark (isotropic) to bright (anisotropic)
+        return vec3(anisotropy) * vec3(0.9, 0.7, 1.0);
+    }
+}
+
+// Cinematic Rendering: Compute shadow/occlusion along light direction
+// Respects clip bounds so clipped edges appear properly lit
+float computeCinematicShadow(vec3 pos, vec3 lightDir, int samples) {
+    float shadow = 0.0;
+    float stepSize = 0.02;
+    
+    for (int i = 1; i <= 32; i++) {
+        if (i > samples) break;
+        vec3 samplePos = pos + lightDir * stepSize * float(i);
+        
+        // Check volume bounds
+        if (any(lessThan(samplePos, vec3(0.0))) || any(greaterThan(samplePos, vec3(1.0)))) break;
+        
+        // Check clip bounds - stop shadow if we exit the clipped region
+        if (clipMode == 0) {
+            // Box clipping
+            if (any(lessThan(samplePos, clipMin)) || any(greaterThan(samplePos, clipMax))) break;
+        } else {
+            // Sphere clipping
+            float distFromCenter = length(samplePos - sphereCenter);
+            if (distFromCenter > sphereRadius) break;
+        }
+        
+        float density = texture(volumeTexture, samplePos).r;
+        shadow += density * cinematicAbsorption;
+    }
+    
+    return exp(-shadow);
+}
+
+// Cinematic scattering approximation (Henyey-Greenstein phase function)
+float henyeyGreenstein(float cosTheta, float g) {
+    float g2 = g * g;
+    return (1.0 - g2) / (4.0 * 3.14159 * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
 }
 
 // Phong lighting calculation
@@ -291,11 +413,46 @@ void main() {
             // Front-to-back compositing (Accumulate mode)
             vec4 sampleColor = transferFunction(intensity);
             
-            // Apply lighting if enabled
-            if (lightingEnabled == 1 && sampleColor.a > 0.01) {
-                vec3 gradient = computeGradient(samplePos);
-                vec3 viewDir = -rayDir;
-                vec3 lightDir = viewDir; // Headlight: light from camera direction
+            // Compute gradient for lighting and structure tensor
+            vec3 gradient = computeGradient(samplePos);
+            vec3 viewDir = -rayDir;
+            vec3 lightDir = viewDir; // Headlight: light from camera direction
+            
+            // Apply Structure Tensor visualization if enabled
+            if (structureTensorEnabled > 0.5 && sampleColor.a > 0.01) {
+                vec3 tensorInfo = computeStructureTensor(samplePos);
+                vec3 tensorColor = structureTensorToColor(tensorInfo, structureTensorMode);
+                // Blend tensor color with original based on strength and coherence
+                float blendFactor = structureTensorStrength * tensorInfo.x; // Weight by coherence
+                sampleColor.rgb = mix(sampleColor.rgb, tensorColor, blendFactor);
+            }
+            
+            // Apply Cinematic Rendering if enabled
+            if (cinematicEnabled > 0.5 && sampleColor.a > 0.01) {
+                // Compute shadow from light direction
+                float shadowFactor = computeCinematicShadow(samplePos, lightDir, cinematicSamples);
+                shadowFactor = clamp(mix(1.0, shadowFactor, cinematicShadowStrength), 0.1, 1.0);
+                
+                // Apply scattering only if we have a valid gradient
+                float gradMag = length(gradient);
+                float scatter = 1.0;
+                if (gradMag > 0.001) {
+                    float cosTheta = clamp(dot(gradient / gradMag, viewDir), -1.0, 1.0);
+                    // Simplified scattering - avoid extreme values from HG function
+                    scatter = 0.7 + 0.3 * (1.0 + cosTheta) * 0.5 * cinematicScattering;
+                    scatter = clamp(scatter, 0.3, 1.5);
+                }
+                
+                // Combine shadow and scatter
+                sampleColor.rgb *= shadowFactor * scatter;
+                
+                // Add subtle ambient occlusion based on local density
+                float aoFactor = 1.0 - intensity * cinematicAbsorption * 0.2;
+                sampleColor.rgb *= clamp(aoFactor, 0.3, 1.0);
+            }
+            
+            // Apply standard lighting if enabled (and cinematic is off)
+            if (lightingEnabled == 1 && cinematicEnabled < 0.5 && sampleColor.a > 0.01) {
                 sampleColor.rgb = applyLighting(sampleColor.rgb, gradient, viewDir, lightDir);
             }
             

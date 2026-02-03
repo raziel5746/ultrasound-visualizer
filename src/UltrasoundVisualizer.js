@@ -104,6 +104,20 @@ const UltrasoundVisualizer = ({
     minOpacity: 0.0,  // Min opacity for low-intensity preservation (0-0.5)
     preset: 'default' // Preset name: default, fullRange, highContrast, softTissue
   });
+  // Structure Tensor visualization - reveals fiber/tissue orientation patterns
+  const [volumeStructureTensor, setVolumeStructureTensor] = useState({
+    enabled: false,
+    strength: 0.5,   // Blend strength (0-1)
+    mode: 0          // 0 = coherence, 1 = orientation, 2 = anisotropy
+  });
+  // Cinematic Rendering - photorealistic lighting with shadows and scattering
+  const [volumeCinematic, setVolumeCinematic] = useState({
+    enabled: false,
+    scattering: 0.5,     // Scattering coefficient (0-2)
+    absorption: 0.5,     // Absorption coefficient (0-2)
+    shadowStrength: 0.5, // Shadow intensity (0-1)
+    samples: 16          // Number of shadow samples (4-32)
+  });
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -483,10 +497,12 @@ const UltrasoundVisualizer = ({
           lighting: volumeLighting,
           transferFunction: volumeTransferFunction,
           isosurface: volumeIsosurface,
+          structureTensor: volumeStructureTensor,
+          cinematic: volumeCinematic,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface, volumeStructureTensor, volumeCinematic]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1444,6 +1460,10 @@ const UltrasoundVisualizer = ({
         setVolumeTransferFunction={setVolumeTransferFunction}
         volumeIsosurface={volumeIsosurface}
         setVolumeIsosurface={setVolumeIsosurface}
+        volumeStructureTensor={volumeStructureTensor}
+        setVolumeStructureTensor={setVolumeStructureTensor}
+        volumeCinematic={volumeCinematic}
+        setVolumeCinematic={setVolumeCinematic}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>

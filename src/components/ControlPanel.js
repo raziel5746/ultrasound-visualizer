@@ -430,6 +430,10 @@ const ControlPanel = ({
   setVolumeTransferFunction,
   volumeIsosurface,
   setVolumeIsosurface,
+  volumeStructureTensor,
+  setVolumeStructureTensor,
+  volumeCinematic,
+  setVolumeCinematic,
   volumeClipMode,
   setVolumeClipMode,
   volumeSphereClip,
@@ -1093,6 +1097,137 @@ const ControlPanel = ({
                           style={{ width: '100%' }}
                         />
                       </div>
+                    </div>
+                    
+                    {/* Structure Tensor Visualization */}
+                    <div style={{ marginTop: '15px', marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          <FaAdjust style={{ marginRight: '10px' }} />
+                          Structure Tensor (Fiber Orientation)
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={volumeStructureTensor?.enabled || false}
+                          onChange={(e) => setVolumeStructureTensor && setVolumeStructureTensor(prev => ({...prev, enabled: e.target.checked}))}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </label>
+                      
+                      {volumeStructureTensor?.enabled && (
+                        <div style={{ paddingLeft: '5px' }}>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Mode</span>
+                            </div>
+                            <select
+                              value={volumeStructureTensor?.mode || 0}
+                              onChange={(e) => setVolumeStructureTensor && setVolumeStructureTensor(prev => ({...prev, mode: parseInt(e.target.value)}))}
+                              style={{ width: '100%', padding: '6px', backgroundColor: '#333', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}
+                            >
+                              <option value={0}>Coherence (structure alignment)</option>
+                              <option value={1}>Orientation (fiber direction)</option>
+                              <option value={2}>Anisotropy (directional strength)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Strength</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeStructureTensor?.strength || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={volumeStructureTensor?.strength || 0.5}
+                              onChange={(e) => setVolumeStructureTensor && setVolumeStructureTensor(prev => ({...prev, strength: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Cinematic Rendering */}
+                    <div style={{ marginTop: '15px', marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          <FaAdjust style={{ marginRight: '10px' }} />
+                          Cinematic Rendering
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={volumeCinematic?.enabled || false}
+                          onChange={(e) => setVolumeCinematic && setVolumeCinematic(prev => ({...prev, enabled: e.target.checked}))}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </label>
+                      
+                      {volumeCinematic?.enabled && (
+                        <div style={{ paddingLeft: '5px' }}>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Shadow Strength</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeCinematic?.shadowStrength || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={volumeCinematic?.shadowStrength || 0.5}
+                              onChange={(e) => setVolumeCinematic && setVolumeCinematic(prev => ({...prev, shadowStrength: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Scattering</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeCinematic?.scattering || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="2"
+                              step="0.1"
+                              value={volumeCinematic?.scattering || 0.5}
+                              onChange={(e) => setVolumeCinematic && setVolumeCinematic(prev => ({...prev, scattering: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Absorption</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{(volumeCinematic?.absorption || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="2"
+                              step="0.1"
+                              value={volumeCinematic?.absorption || 0.5}
+                              onChange={(e) => setVolumeCinematic && setVolumeCinematic(prev => ({...prev, absorption: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#aaa' }}>Shadow Samples</span>
+                              <span style={{ fontSize: '11px', color: '#666' }}>{volumeCinematic?.samples || 16}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="4"
+                              max="32"
+                              step="4"
+                              value={volumeCinematic?.samples || 16}
+                              onChange={(e) => setVolumeCinematic && setVolumeCinematic(prev => ({...prev, samples: parseInt(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                 </ControlGroup>
               )}

@@ -634,6 +634,8 @@ class SceneManager {
     if (settings.lighting !== undefined) this.volumeRenderer.setLighting(settings.lighting);
     if (settings.transferFunction !== undefined) this.volumeRenderer.setTransferFunction(settings.transferFunction);
     if (settings.isosurface !== undefined) this.volumeRenderer.setIsosurface(settings.isosurface);
+    if (settings.structureTensor !== undefined) this.volumeRenderer.setStructureTensor(settings.structureTensor);
+    if (settings.cinematic !== undefined) this.volumeRenderer.setCinematic(settings.cinematic);
   }
 
   updateVolumeCameraPosition() {

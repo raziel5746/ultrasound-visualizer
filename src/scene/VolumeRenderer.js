@@ -29,6 +29,20 @@ class VolumeRenderer {
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
       transferFunction: 'grayscale',
       isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
+      // Structure Tensor visualization
+      structureTensor: {
+        enabled: false,
+        strength: 0.5,   // Blend strength (0-1)
+        mode: 0          // 0 = coherence, 1 = orientation, 2 = anisotropy
+      },
+      // Cinematic Rendering
+      cinematic: {
+        enabled: false,
+        scattering: 0.5,     // Scattering coefficient (0-2)
+        absorption: 0.5,     // Absorption coefficient (0-2)
+        shadowStrength: 0.5, // Shadow intensity (0-1)
+        samples: 16          // Number of shadow samples (4-32)
+      },
     };
   }
 
@@ -81,7 +95,9 @@ class VolumeRenderer {
         'gamma', 'softness', 'minOpacity',
         'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
         'transferFunctionType',
-        'isoLevel', 'isoSmoothness', 'isoOpacity'
+        'isoLevel', 'isoSmoothness', 'isoOpacity',
+        'structureTensorEnabled', 'structureTensorStrength', 'structureTensorMode',
+        'cinematicEnabled', 'cinematicScattering', 'cinematicAbsorption', 'cinematicShadowStrength', 'cinematicSamples'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -153,6 +169,20 @@ class VolumeRenderer {
     this.material.setFloat('isoLevel', iso.level);
     this.material.setFloat('isoSmoothness', iso.smoothness);
     this.material.setFloat('isoOpacity', iso.opacity);
+    
+    // Set Structure Tensor
+    const st = this.settings.structureTensor;
+    this.material.setFloat('structureTensorEnabled', st.enabled ? 1.0 : 0.0);
+    this.material.setFloat('structureTensorStrength', st.strength);
+    this.material.setInt('structureTensorMode', st.mode);
+    
+    // Set Cinematic Rendering
+    const cin = this.settings.cinematic;
+    this.material.setFloat('cinematicEnabled', cin.enabled ? 1.0 : 0.0);
+    this.material.setFloat('cinematicScattering', cin.scattering);
+    this.material.setFloat('cinematicAbsorption', cin.absorption);
+    this.material.setFloat('cinematicShadowStrength', cin.shadowStrength);
+    this.material.setInt('cinematicSamples', cin.samples);
   }
 
   setStepSize(value) {
@@ -261,6 +291,16 @@ class VolumeRenderer {
 
   setIsosurface(iso) {
     this.settings.isosurface = { ...iso };
+    this.updateUniforms();
+  }
+
+  setStructureTensor(structureTensor) {
+    this.settings.structureTensor = { ...this.settings.structureTensor, ...structureTensor };
+    this.updateUniforms();
+  }
+
+  setCinematic(cinematic) {
+    this.settings.cinematic = { ...this.settings.cinematic, ...cinematic };
     this.updateUniforms();
   }
 
