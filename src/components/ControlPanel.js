@@ -395,6 +395,8 @@ const ControlPanel = ({
   setVolumeLighting,
   volumeTransferFunction,
   setVolumeTransferFunction,
+  volumeIsosurface,
+  setVolumeIsosurface,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -645,10 +647,11 @@ const ControlPanel = ({
                       >
                         <option value={0}>Accumulate</option>
                         <option value={1}>Max Intensity (MIP)</option>
+                        <option value={2}>Isosurface</option>
                       </select>
                     </div>
-                    {/* Threshold - only show in Accumulate mode (not MIP) */}
-                    {volumeRenderType !== 1 && (
+                    {/* Threshold - only show in Accumulate mode */}
+                    {volumeRenderType === 0 && (
                       <ControlItem
                         icon={<FaEye />}
                         label="Threshold"
@@ -660,6 +663,47 @@ const ControlPanel = ({
                         displayValue={(v) => v.toFixed(2)}
                         isMobile={isMobile}
                       />
+                    )}
+                    {/* Isosurface controls - only show in Isosurface mode */}
+                    {volumeRenderType === 2 && (
+                      <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span style={{ display: 'flex', alignItems: 'center' }}>
+                              <FaEye style={{ marginRight: '8px' }} />
+                              Isosurface Level
+                            </span>
+                            <span style={{ color: '#666' }}>{(volumeIsosurface?.level || 0.3).toFixed(2)}</span>
+                          </div>
+                          <input type="range" min="0.05" max="0.95" step="0.01"
+                            value={volumeIsosurface?.level || 0.3}
+                            onChange={(e) => setVolumeIsosurface(prev => ({...prev, level: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span>Smoothness</span>
+                            <span style={{ color: '#666' }}>{(volumeIsosurface?.smoothness || 1.0).toFixed(1)}</span>
+                          </div>
+                          <input type="range" min="0.25" max="2" step="0.25"
+                            value={volumeIsosurface?.smoothness || 1.0}
+                            onChange={(e) => setVolumeIsosurface(prev => ({...prev, smoothness: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span>Opacity</span>
+                            <span style={{ color: '#666' }}>{(volumeIsosurface?.opacity || 1.0).toFixed(2)}</span>
+                          </div>
+                          <input type="range" min="0.1" max="1" step="0.05"
+                            value={volumeIsosurface?.opacity || 1.0}
+                            onChange={(e) => setVolumeIsosurface(prev => ({...prev, opacity: parseFloat(e.target.value)}))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
                     )}
                     <ControlItem
                       icon={<FaLayerGroup />}

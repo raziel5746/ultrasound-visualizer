@@ -627,6 +627,7 @@ class SceneManager {
     if (settings.clipBounds !== undefined) this.volumeRenderer.setClipBounds(settings.clipBounds);
     if (settings.lighting !== undefined) this.volumeRenderer.setLighting(settings.lighting);
     if (settings.transferFunction !== undefined) this.volumeRenderer.setTransferFunction(settings.transferFunction);
+    if (settings.isosurface !== undefined) this.volumeRenderer.setIsosurface(settings.isosurface);
   }
 
   updateVolumeCameraPosition() {

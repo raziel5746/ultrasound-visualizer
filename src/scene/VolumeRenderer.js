@@ -22,6 +22,7 @@ class VolumeRenderer {
       clipBounds: { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 },
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
       transferFunction: 'grayscale',
+      isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
     };
   }
 
@@ -71,7 +72,8 @@ class VolumeRenderer {
         'threshold', 'volumeDimensions', 'maxSteps', 'renderMode',
         'clipMin', 'clipMax',
         'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
-        'transferFunctionType'
+        'transferFunctionType',
+        'isoLevel', 'isoSmoothness', 'isoOpacity'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -126,6 +128,12 @@ class VolumeRenderer {
     // Set transfer function type
     const tfMap = { grayscale: 0, heat: 1, cool: 2, bone: 3, copper: 4, viridis: 5, plasma: 6, rainbow: 7 };
     this.material.setInt('transferFunctionType', tfMap[this.settings.transferFunction] || 0);
+    
+    // Set isosurface parameters
+    const iso = this.settings.isosurface;
+    this.material.setFloat('isoLevel', iso.level);
+    this.material.setFloat('isoSmoothness', iso.smoothness);
+    this.material.setFloat('isoOpacity', iso.opacity);
   }
 
   setStepSize(value) {
@@ -187,6 +195,11 @@ class VolumeRenderer {
 
   setTransferFunction(tf) {
     this.settings.transferFunction = tf;
+    this.updateUniforms();
+  }
+
+  setIsosurface(iso) {
+    this.settings.isosurface = { ...iso };
     this.updateUniforms();
   }
 

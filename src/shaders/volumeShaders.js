@@ -52,6 +52,11 @@ uniform float shininess;
 // Transfer function uniform
 uniform int transferFunctionType; // 0=grayscale, 1=heat, 2=cool, 3=bone, 4=copper, 5=viridis, 6=plasma, 7=rainbow
 
+// Isosurface uniforms
+uniform float isoLevel;      // Isosurface intensity level
+uniform float isoSmoothness; // Step multiplier for smoother surfaces
+uniform float isoOpacity;    // Surface opacity
+
 varying vec3 vRayDir;
 varying vec3 vPosition;
 varying vec3 vTransformedEye;
@@ -191,6 +196,9 @@ void main() {
     
     vec4 accumulatedColor = vec4(0.0);
     float maxIntensity = 0.0;
+    float prevIntensity = 0.0;
+    bool foundIsosurface = false;
+    vec3 isosurfacePos = vec3(0.0);
     
     float t = tHit.x;
     float tEnd = tHit.y;
@@ -199,6 +207,11 @@ void main() {
     // Adaptive step size based on ray length
     float adaptiveStep = rayLength / float(maxSteps);
     float actualStep = max(stepSize, adaptiveStep);
+    
+    // For isosurface, use smoothness to adjust step size (smaller = smoother)
+    if (renderMode == 2) {
+        actualStep = actualStep / isoSmoothness;
+    }
     
     for (int i = 0; i < 512; i++) {
         if (i >= maxSteps) break;
@@ -223,8 +236,20 @@ void main() {
         if (renderMode == 1) {
             // Maximum Intensity Projection
             maxIntensity = max(maxIntensity, intensity);
+        } else if (renderMode == 2) {
+            // Isosurface rendering - detect threshold crossing
+            if (!foundIsosurface && prevIntensity < isoLevel && intensity >= isoLevel) {
+                // Found the isosurface - interpolate position
+                float ratio = (isoLevel - prevIntensity) / (intensity - prevIntensity + 0.001);
+                isosurfacePos = vTransformedEye + rayDir * (t - actualStep + actualStep * ratio);
+                isosurfacePos = clamp(isosurfacePos, vec3(0.001), vec3(0.999));
+                isosurfacePos.y = 1.0 - isosurfacePos.y;
+                foundIsosurface = true;
+                break;
+            }
+            prevIntensity = intensity;
         } else {
-            // Front-to-back compositing
+            // Front-to-back compositing (Accumulate mode)
             vec4 sampleColor = transferFunction(intensity);
             
             // Apply lighting if enabled
@@ -255,6 +280,43 @@ void main() {
         }
         
         gl_FragColor = vec4(mipColor, 1.0);
+    } else if (renderMode == 2) {
+        // Isosurface rendering
+        if (!foundIsosurface) {
+            discard;
+        }
+        
+        // Get intensity at isosurface for color mapping
+        float isoIntensity = texture(volumeTexture, isosurfacePos).r * brightness;
+        vec3 isoColor = applyColorMap(isoIntensity);
+        
+        // Always apply lighting for isosurface (it's a surface, needs shading)
+        vec3 gradient = computeGradient(isosurfacePos);
+        vec3 viewDir = -rayDir;
+        vec3 lightDir = viewDir;
+        
+        // Use lighting parameters or defaults
+        float isoAmbient = lightingEnabled == 1 ? ambient : 0.3;
+        float isoDiffuse = lightingEnabled == 1 ? diffuse : 0.7;
+        float isoSpecular = lightingEnabled == 1 ? specular : 0.5;
+        float isoShininess = lightingEnabled == 1 ? shininess : 32.0;
+        
+        float gradMag = length(gradient);
+        if (gradMag > 0.001) {
+            vec3 N = normalize(gradient);
+            vec3 L = normalize(lightDir);
+            vec3 V = normalize(viewDir);
+            vec3 H = normalize(L + V);
+            
+            float diff = max(dot(N, L), 0.0);
+            float spec = pow(max(dot(N, H), 0.0), isoShininess);
+            
+            isoColor = isoColor * isoAmbient + isoColor * isoDiffuse * diff + vec3(1.0) * isoSpecular * spec;
+        } else {
+            isoColor = isoColor * isoAmbient;
+        }
+        
+        gl_FragColor = vec4(isoColor, isoOpacity);
     } else {
         // Accumulate mode - discard if nothing accumulated
         if (accumulatedColor.a < 0.01) {
