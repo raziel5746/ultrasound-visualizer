@@ -1006,7 +1006,6 @@ const ControlPanel = ({
                     
                     {/* Visualization Presets and Curve Controls - only for Accumulate mode */}
                     {volumeRenderType === 0 && (
-                    <>
                     <div style={{ marginTop: '15px', marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                         <FaAdjust style={{ marginRight: '10px' }} />
@@ -1094,8 +1093,10 @@ const ControlPanel = ({
                         />
                       </div>
                     </div>
+                    )}
                     
-                    {/* Dark Volume Controls - only for Accumulate mode */}
+                    {/* Dark Volume Controls - for Accumulate and MIP modes */}
+                    {(volumeRenderType === 0 || volumeRenderType === 1) && (
                     <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #404040' }}>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -1187,7 +1188,6 @@ const ControlPanel = ({
                         </div>
                       )}
                     </div>
-                    </>
                     )}
                 </ControlGroup>
               )}

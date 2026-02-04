@@ -214,6 +214,9 @@ void main() {
     
     vec4 accumulatedColor = vec4(0.0);
     float maxIntensity = 0.0;
+    float minIntensity = 1.0; // Track minimum for dark volumes in MIP mode
+    float minIntensityT = 0.0; // Position along ray where minimum was found
+    float maxIntensityT = 0.0; // Position along ray where maximum was found
     float prevIntensity = 0.0;
     bool foundIsosurface = false;
     vec3 isosurfacePos = vec3(0.0);
@@ -270,8 +273,16 @@ void main() {
         float intensity = texture(volumeTexture, samplePos).r;
         
         if (renderMode == 1) {
-            // Maximum Intensity Projection
-            maxIntensity = max(maxIntensity, intensity);
+            // Maximum Intensity Projection - track position of max
+            if (intensity > maxIntensity) {
+                maxIntensity = intensity;
+                maxIntensityT = t;
+            }
+            // Also track minimum for dark volume rendering (exclude pure black borders)
+            if (intensity > 0.02 && intensity < minIntensity) {
+                minIntensity = intensity;
+                minIntensityT = t;
+            }
         } else if (renderMode == 2) {
             // Isosurface rendering - detect threshold crossing
             if (!foundIsosurface && prevIntensity < isoLevel && intensity >= isoLevel) {
@@ -339,7 +350,24 @@ void main() {
             mipColor = mipColor * (ambient + diffuse * 0.5);
         }
         
-        gl_FragColor = vec4(mipColor, 1.0);
+        // Blend dark volumes if enabled - depth-aware
+        if (darkVolumeEnabled == 1 && minIntensity < darkThreshold && minIntensity < 1.0) {
+            // Calculate dark volume contribution based on how dark the minimum was
+            float darkAlpha = smoothstep(darkThreshold, 0.02, minIntensity) * darkOpacity;
+            
+            // Check if dark region is in front of (closer than) bright region
+            // If dark is in front, blend more; if behind, blend less
+            if (minIntensityT < maxIntensityT) {
+                // Dark is in FRONT of bright - show dark with full strength
+                mipColor = mix(mipColor, darkColor, darkAlpha);
+            } else {
+                // Dark is BEHIND bright - reduce effect based on bright intensity
+                float behindFactor = 1.0 - smoothstep(0.2, 0.6, maxIntensity);
+                mipColor = mix(mipColor, darkColor, darkAlpha * behindFactor);
+            }
+        }
+        
+        gl_FragColor = vec4(mipColor, opacity);
     } else if (renderMode == 2) {
         // Isosurface rendering
         if (!foundIsosurface) {
