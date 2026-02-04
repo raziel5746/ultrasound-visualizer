@@ -907,7 +907,8 @@ const ControlPanel = ({
               {renderMode === 'volume' && setVolumeThreshold && (
                 <ControlGroup isMobile={isMobile} style={{ marginTop: '15px' }}>
                     
-                    {/* Volume Lighting/Shading Controls */}
+                    {/* Volume Lighting/Shading Controls - HIDDEN but code preserved for future use */}
+                    {false && (
                     <div style={{ marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -971,6 +972,7 @@ const ControlPanel = ({
                         </div>
                       )}
                     </div>
+                    )}
                     
                     {/* Transfer Function / Color Map for Volume */}
                     <div style={{ marginTop: '15px', marginBottom: '10px' }}>

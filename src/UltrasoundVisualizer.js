@@ -106,12 +106,35 @@ const UltrasoundVisualizer = ({
   });
   // Dark volume rendering - render low-intensity areas as solid
   const [volumeDarkVolume, setVolumeDarkVolume] = useState({
-    enabled: false,
+    enabled: true,    // ON by default
     threshold: 0.15,  // Intensity below this is considered "dark" (0-0.5)
     color: { r: 0.2, g: 0.4, b: 0.8 }, // Blue by default for visibility
     opacity: 0.5      // Opacity multiplier for dark volumes
   });
   const volumeTextureRef = useRef(null);
+  
+  // Per-volume-type settings storage
+  const volumeTypeSettingsRef = useRef({
+    0: { // Accumulate defaults
+      threshold: 0.0,
+      opacity: 1.0,
+      brightness: 1.0,
+      curve: { gamma: 1.0, softness: 0.3, minOpacity: 0.0, preset: 'default' },
+      darkVolume: { enabled: true, threshold: 0.15, color: { r: 0.2, g: 0.4, b: 0.8 }, opacity: 0.5 },
+    },
+    1: { // MIP defaults
+      threshold: 0.0,
+      opacity: 1.0,
+      brightness: 1.0,
+      darkVolume: { enabled: true, threshold: 0.15, color: { r: 0.2, g: 0.4, b: 0.8 }, opacity: 0.5 },
+    },
+    2: { // Isosurface defaults
+      threshold: 0.0,
+      opacity: 1.0,
+      brightness: 1.0,
+      isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
+    }
+  });
 
   // Update the defaultValues object to include all filter values
   const defaultValues = useMemo(() => ({
@@ -155,6 +178,33 @@ const UltrasoundVisualizer = ({
     isInverted: defaultValues.textureFilters.isInverted,
     isGrayscale: defaultValues.textureFilters.isGrayscale
   });
+  
+  // Handler for switching volume types - saves current settings and loads new type's settings
+  const handleVolumeRenderTypeChange = useCallback((newType) => {
+    // Save current settings to the current type
+    volumeTypeSettingsRef.current[volumeRenderType] = {
+      threshold: volumeThreshold,
+      opacity: opacity,
+      brightness: brightness,
+      curve: { ...volumeCurve },
+      darkVolume: { ...volumeDarkVolume },
+      isosurface: { ...volumeIsosurface },
+    };
+    
+    // Load settings from the new type
+    const newSettings = volumeTypeSettingsRef.current[newType];
+    if (newSettings) {
+      setVolumeThreshold(newSettings.threshold ?? 0.0);
+      setOpacity(newSettings.opacity ?? 1.0);
+      setBrightness(newSettings.brightness ?? 1.0);
+      if (newSettings.curve) setVolumeCurve(prev => ({ ...prev, ...newSettings.curve }));
+      if (newSettings.darkVolume) setVolumeDarkVolume(prev => ({ ...prev, ...newSettings.darkVolume }));
+      if (newSettings.isosurface) setVolumeIsosurface(prev => ({ ...prev, ...newSettings.isosurface }));
+    }
+    
+    // Switch the type
+    setVolumeRenderType(newType);
+  }, [volumeRenderType, volumeThreshold, opacity, brightness, volumeCurve, volumeDarkVolume, volumeIsosurface]);
 
   // Initialize color map parameters when color map changes
   useEffect(() => {
@@ -1435,7 +1485,7 @@ const UltrasoundVisualizer = ({
         volumeStepSize={volumeStepSize}
         setVolumeStepSize={setVolumeStepSize}
         volumeRenderType={volumeRenderType}
-        setVolumeRenderType={setVolumeRenderType}
+        setVolumeRenderType={handleVolumeRenderTypeChange}
         volumeLength={volumeLength}
         setVolumeLength={setVolumeLength}
         volumeClipBounds={volumeClipBounds}
