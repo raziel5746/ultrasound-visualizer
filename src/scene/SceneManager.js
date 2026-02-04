@@ -878,7 +878,11 @@ class SceneManager {
   }
 
   _handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, clientX, clientY) {
-    const boxSensitivity = sensitivity * 4;
+    // Adjust sensitivity based on zoom level
+    // More zoomed in (small radius) = slower, zoomed out (large radius) = faster
+    const radius = this.currentCamera.radius;
+    const zoomFactor = Math.sqrt(Math.max(0.3, radius)) / 4;
+    const boxSensitivity = sensitivity * 0.5 * zoomFactor;
     
     // Initialize axis and handle on first significant movement
     if (!this.boxDragInitialized) {
