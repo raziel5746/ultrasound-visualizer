@@ -36,6 +36,12 @@ uniform float isoLevel;      // Isosurface intensity level
 uniform float isoSmoothness; // Step multiplier for smoother surfaces
 uniform float isoOpacity;    // Surface opacity
 
+// Dark volume uniforms - render low-intensity areas as solid
+uniform int darkVolumeEnabled;   // 0 = disabled, 1 = enabled
+uniform float darkThreshold;     // Intensity below this is considered "dark" (0-1)
+uniform vec3 darkColor;          // Color for dark volumes
+uniform float darkOpacity;       // Opacity multiplier for dark volumes
+
 varying vec3 vRayDir;
 varying vec3 vPosition;
 varying vec3 vTransformedEye;
@@ -175,6 +181,27 @@ vec4 transferFunction(float intensity) {
     return vec4(color, alpha);
 }
 
+// Transfer function for dark volumes - inverted logic
+vec4 darkTransferFunction(float intensity) {
+    // Exclude pure black areas (the border/empty regions around the ultrasound cone)
+    // Only consider areas with SOME intensity as potential dark volumes
+    // This prevents the black border from being rendered as solid
+    float minIntensityFloor = 0.02; // Areas below this are considered empty/border
+    
+    if (intensity < minIntensityFloor) {
+        return vec4(0.0); // Completely transparent for pure black areas
+    }
+    
+    // Dark volumes: intensity BELOW darkThreshold (but above floor) is solid
+    // Use smooth transition for soft edges
+    float darkAlpha = smoothstep(darkThreshold, minIntensityFloor, intensity);
+    
+    // Apply dark opacity multiplier
+    darkAlpha *= darkOpacity * opacity;
+    
+    return vec4(darkColor, darkAlpha);
+}
+
 void main() {
     vec3 rayDir = normalize(vRayDir);
     vec2 tHit = intersectBox(vTransformedEye, rayDir);
@@ -267,6 +294,30 @@ void main() {
                 vec3 viewDir = -rayDir;
                 vec3 lightDir = viewDir; // Headlight: light from camera direction
                 sampleColor.rgb = applyLighting(sampleColor.rgb, gradient, viewDir, lightDir);
+            }
+            
+            // Also sample dark volumes if enabled
+            if (darkVolumeEnabled == 1) {
+                vec4 darkSample = darkTransferFunction(intensity);
+                
+                // Apply lighting to dark volumes if enabled
+                if (lightingEnabled == 1 && darkSample.a > 0.01) {
+                    vec3 gradient = computeGradient(samplePos);
+                    vec3 viewDir = -rayDir;
+                    vec3 lightDir = viewDir;
+                    darkSample.rgb = applyLighting(darkSample.rgb, gradient, viewDir, lightDir);
+                }
+                
+                // Blend dark and bright samples - dark takes priority for low intensity
+                // If both have alpha, blend based on which is more relevant
+                if (darkSample.a > sampleColor.a) {
+                    sampleColor = darkSample;
+                } else if (darkSample.a > 0.01 && sampleColor.a > 0.01) {
+                    // Blend them when both are present
+                    float totalAlpha = sampleColor.a + darkSample.a;
+                    sampleColor.rgb = (sampleColor.rgb * sampleColor.a + darkSample.rgb * darkSample.a) / totalAlpha;
+                    sampleColor.a = min(totalAlpha, 1.0);
+                }
             }
             
             accumulatedColor.rgb += (1.0 - accumulatedColor.a) * sampleColor.rgb * sampleColor.a;

@@ -436,6 +436,8 @@ const ControlPanel = ({
   setVolumeSphereClip,
   volumeCurve,
   setVolumeCurve,
+  volumeDarkVolume,
+  setVolumeDarkVolume,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -1093,6 +1095,99 @@ const ControlPanel = ({
                           style={{ width: '100%' }}
                         />
                       </div>
+                    </div>
+                    
+                    {/* Dark Volume Controls */}
+                    <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #404040' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          <FaAdjust style={{ marginRight: '10px' }} />
+                          Dark Volume Rendering
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={volumeDarkVolume?.enabled || false}
+                          onChange={(e) => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, enabled: e.target.checked}))}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </label>
+                      <p style={{ fontSize: '11px', color: '#888', marginBottom: '12px', lineHeight: 1.4 }}>
+                        Render dark/low-intensity areas as solid volumes (useful for fluid-filled structures)
+                      </p>
+                      
+                      {volumeDarkVolume?.enabled && (
+                        <div style={{ fontSize: '12px' }}>
+                          {/* Dark Threshold slider */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ color: '#aaa' }}>Dark Threshold</span>
+                              <span style={{ color: '#666' }}>{(volumeDarkVolume?.threshold || 0.15).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.01"
+                              max="0.5"
+                              step="0.01"
+                              value={volumeDarkVolume?.threshold || 0.15}
+                              onChange={(e) => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, threshold: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Dark Opacity slider */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ color: '#aaa' }}>Dark Volume Opacity</span>
+                              <span style={{ color: '#666' }}>{(volumeDarkVolume?.opacity || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.1"
+                              max="1.0"
+                              step="0.05"
+                              value={volumeDarkVolume?.opacity || 0.5}
+                              onChange={(e) => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, opacity: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Dark Color picker */}
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <span style={{ color: '#aaa' }}>Dark Volume Color</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {[
+                                { name: 'Blue', color: { r: 0.2, g: 0.4, b: 0.8 } },
+                                { name: 'Cyan', color: { r: 0.1, g: 0.7, b: 0.8 } },
+                                { name: 'Purple', color: { r: 0.5, g: 0.2, b: 0.8 } },
+                                { name: 'Green', color: { r: 0.2, g: 0.7, b: 0.3 } },
+                                { name: 'Orange', color: { r: 0.9, g: 0.5, b: 0.1 } },
+                                { name: 'Red', color: { r: 0.8, g: 0.2, b: 0.2 } },
+                              ].map(({ name, color }) => (
+                                <div
+                                  key={name}
+                                  onClick={() => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, color}))}
+                                  title={name}
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '4px',
+                                    backgroundColor: `rgb(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)})`,
+                                    cursor: 'pointer',
+                                    border: volumeDarkVolume?.color?.r === color.r && 
+                                            volumeDarkVolume?.color?.g === color.g && 
+                                            volumeDarkVolume?.color?.b === color.b 
+                                      ? '2px solid #fff' 
+                                      : '2px solid transparent',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                 </ControlGroup>
               )}

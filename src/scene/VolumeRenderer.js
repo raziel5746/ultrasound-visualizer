@@ -29,6 +29,7 @@ class VolumeRenderer {
       lighting: { enabled: false, ambient: 0.3, diffuse: 0.7, specular: 0.4, shininess: 32.0 },
       transferFunction: 'grayscale',
       isosurface: { level: 0.3, smoothness: 1.0, opacity: 1.0 },
+      darkVolume: { enabled: false, threshold: 0.15, color: { r: 0.2, g: 0.4, b: 0.8 }, opacity: 0.5 },
     };
   }
 
@@ -83,7 +84,8 @@ class VolumeRenderer {
         'gamma', 'softness', 'minOpacity',
         'lightingEnabled', 'ambient', 'diffuse', 'specular', 'shininess',
         'transferFunctionType',
-        'isoLevel', 'isoSmoothness', 'isoOpacity'
+        'isoLevel', 'isoSmoothness', 'isoOpacity',
+        'darkVolumeEnabled', 'darkThreshold', 'darkColor', 'darkOpacity'
       ],
       samplers: ['volumeTexture'],
       needAlphaBlending: true,
@@ -155,6 +157,13 @@ class VolumeRenderer {
     this.material.setFloat('isoLevel', iso.level);
     this.material.setFloat('isoSmoothness', iso.smoothness);
     this.material.setFloat('isoOpacity', iso.opacity);
+    
+    // Set dark volume parameters
+    const dv = this.settings.darkVolume;
+    this.material.setInt('darkVolumeEnabled', dv.enabled ? 1 : 0);
+    this.material.setFloat('darkThreshold', dv.threshold);
+    this.material.setVector3('darkColor', new BABYLON.Vector3(dv.color.r, dv.color.g, dv.color.b));
+    this.material.setFloat('darkOpacity', dv.opacity);
   }
 
   setStepSize(value) {
@@ -263,6 +272,11 @@ class VolumeRenderer {
 
   setIsosurface(iso) {
     this.settings.isosurface = { ...iso };
+    this.updateUniforms();
+  }
+
+  setDarkVolume(darkVolume) {
+    this.settings.darkVolume = { ...this.settings.darkVolume, ...darkVolume };
     this.updateUniforms();
   }
 

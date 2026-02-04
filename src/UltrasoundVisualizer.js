@@ -104,6 +104,13 @@ const UltrasoundVisualizer = ({
     minOpacity: 0.0,  // Min opacity for low-intensity preservation (0-0.5)
     preset: 'default' // Preset name: default, fullRange, highContrast, softTissue
   });
+  // Dark volume rendering - render low-intensity areas as solid
+  const [volumeDarkVolume, setVolumeDarkVolume] = useState({
+    enabled: false,
+    threshold: 0.15,  // Intensity below this is considered "dark" (0-0.5)
+    color: { r: 0.2, g: 0.4, b: 0.8 }, // Blue by default for visibility
+    opacity: 0.5      // Opacity multiplier for dark volumes
+  });
   const volumeTextureRef = useRef(null);
 
   // Update the defaultValues object to include all filter values
@@ -483,10 +490,11 @@ const UltrasoundVisualizer = ({
           lighting: volumeLighting,
           transferFunction: volumeTransferFunction,
           isosurface: volumeIsosurface,
+          darkVolume: volumeDarkVolume,
         });
       }
     }
-  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface]);
+  }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface, volumeDarkVolume]);
 
   // Then keep handleResolutionToggle after it
   const handleResolutionToggle = useCallback(async () => {
@@ -1444,6 +1452,8 @@ const UltrasoundVisualizer = ({
         setVolumeTransferFunction={setVolumeTransferFunction}
         volumeIsosurface={volumeIsosurface}
         setVolumeIsosurface={setVolumeIsosurface}
+        volumeDarkVolume={volumeDarkVolume}
+        setVolumeDarkVolume={setVolumeDarkVolume}
       >
         <ControlGroup isMobile={isMobile}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
