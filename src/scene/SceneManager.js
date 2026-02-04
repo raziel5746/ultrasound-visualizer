@@ -578,11 +578,11 @@ class SceneManager {
   }
 
   // Volume Rendering Methods
-  initializeVolumeRenderer(volumeTexture, dimensions) {
+  async initializeVolumeRenderer(volumeTexture, dimensions) {
     if (!this.volumeRenderer) {
       this.volumeRenderer = new VolumeRenderer(this.scene);
     }
-    this.volumeRenderer.initialize(volumeTexture, dimensions);
+    await this.volumeRenderer.initialize(volumeTexture, dimensions);
     this.volumeRenderer.setVisible(this.renderMode === 'volume');
     return this.volumeRenderer;
   }
