@@ -26,6 +26,20 @@ class SceneManager {
     // Volume rendering
     this.volumeRenderer = null;
     this.renderMode = 'planes'; // 'planes' or 'volume'
+    
+    // Clip drag state
+    this.clipDragEnabled = false;
+    this.clipDragStart = null;
+    this.clipDragMode = null; // 'sphere' or 'box'
+    this.clipDragCallback = null; // Callback to update clip settings
+    this.currentSphereClip = { x: 0.5, y: 0.5, z: 0.5, diameter: 0.5 };
+    this.currentClipBounds = { xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1 };
+    this.currentClipMode = 'cube';
+    this.touchCount = 0;
+    // Box drag specific state
+    this.boxDragAxis = null; // 'x', 'y', or 'z' - locked on drag start
+    this.boxDragHandle = null; // 'min' or 'max' - which handle to adjust
+    this.boxDragInitialized = false;
   }
 
   initialize() {
@@ -165,6 +179,9 @@ class SceneManager {
     // Add observers to keep cameras in sync
     this.perspectiveCamera.onViewMatrixChangedObservable.add(() => this.updateCameras());
     this.orthographicCamera.onViewMatrixChangedObservable.add(() => this.updateCameras());
+    
+    // Set up clip drag event listeners
+    this._setupClipDragListeners();
   }
 
   createFrameMesh(texture, position, scale = 1, effects = {}) {
@@ -257,6 +274,7 @@ class SceneManager {
       this.canvas.removeEventListener('wheel', this._wheelListener);
       this._wheelListener = null;
     }
+    this._removeClipDragListeners();
     this.clearFrameMeshes();
     this.scene.dispose();
     this.engine.dispose();
@@ -647,6 +665,348 @@ class SceneManager {
     if (this.volumeRenderer) {
       this.volumeRenderer.dispose();
       this.volumeRenderer = null;
+    }
+  }
+
+  // Set callback for clip drag updates
+  setClipDragCallback(callback) {
+    this.clipDragCallback = callback;
+  }
+
+  // Update stored clip settings (called from UltrasoundVisualizer when settings change)
+  updateClipSettings(sphereClip, clipBounds, clipMode) {
+    if (sphereClip) this.currentSphereClip = { ...sphereClip };
+    if (clipBounds) this.currentClipBounds = { ...clipBounds };
+    if (clipMode) this.currentClipMode = clipMode;
+  }
+
+  _setupClipDragListeners() {
+    let lastPointerPos = null;
+    
+    // Check if clip drag should be active
+    const shouldActivateClipDrag = (evt) => {
+      // Desktop: shift + drag = move clipping (both box and sphere)
+      if (evt.shiftKey && !evt.ctrlKey && evt.button === 0) {
+        return 'position';
+      }
+      // Desktop: ctrl + shift + drag = resize sphere (only in sphere mode)
+      if (evt.ctrlKey && evt.shiftKey && evt.button === 0 && this.currentClipMode === 'sphere') {
+        return 'diameter';
+      }
+      return false;
+    };
+
+    // Handle pointer down
+    this._clipPointerDown = (evt) => {
+      const dragType = shouldActivateClipDrag(evt);
+      if (dragType) {
+        evt.preventDefault();
+        this.clipDragEnabled = true;
+        this.clipDragType = dragType; // 'position' or 'diameter'
+        this.clipDragStart = { x: evt.clientX, y: evt.clientY };
+        lastPointerPos = { x: evt.clientX, y: evt.clientY };
+        // Reset box drag state - will be initialized on first move
+        this.boxDragAxis = null;
+        this.boxDragHandle = null;
+        this.boxDragInitialized = false;
+        // Detach camera controls during clip drag
+        this.camera.detachControl();
+      }
+    };
+
+    // Handle pointer move
+    this._clipPointerMove = (evt) => {
+      if (!this.clipDragEnabled || !lastPointerPos) return;
+      
+      const deltaX = evt.clientX - lastPointerPos.x;
+      const deltaY = evt.clientY - lastPointerPos.y;
+      lastPointerPos = { x: evt.clientX, y: evt.clientY };
+      
+      // Convert screen delta to normalized volume coordinates
+      // Scale factor: larger canvas = smaller movement per pixel
+      const sensitivity = 0.002;
+      
+      // Get camera view matrix to determine which axes to affect
+      const camera = this.currentCamera;
+      const viewMatrix = camera.getViewMatrix();
+      
+      // Get the camera's right and up vectors in world space
+      const right = new BABYLON.Vector3(viewMatrix.m[0], viewMatrix.m[4], viewMatrix.m[8]);
+      const up = new BABYLON.Vector3(viewMatrix.m[1], viewMatrix.m[5], viewMatrix.m[9]);
+      
+      if (this.currentClipMode === 'sphere') {
+        if (this.clipDragType === 'diameter') {
+          // Change sphere diameter based on horizontal drag
+          const diameterSensitivity = 0.005;
+          const diameterDelta = deltaX * diameterSensitivity;
+          let newDiameter = this.currentSphereClip.diameter + diameterDelta;
+          newDiameter = Math.max(0.05, Math.min(2, newDiameter));
+          
+          this.currentSphereClip = { ...this.currentSphereClip, diameter: newDiameter };
+          
+          if (this.clipDragCallback) {
+            this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
+          }
+        } else {
+          // Move sphere position based on screen drag
+          const moveX = deltaX * sensitivity;
+          const moveY = deltaY * sensitivity;
+          
+          // Apply movement along camera-relative axes
+          // For X and Z axes from vertical movement, invert when looking from above/below
+          let newX = this.currentSphereClip.x + right.x * moveX - up.x * moveY;
+          let newY = this.currentSphereClip.y + right.y * moveX + up.y * moveY;
+          let newZ = this.currentSphereClip.z + right.z * moveX - up.z * moveY;
+          
+          // Clamp to valid range
+          newX = Math.max(0, Math.min(1, newX));
+          newY = Math.max(0, Math.min(1, newY));
+          newZ = Math.max(0, Math.min(1, newZ));
+          
+          this.currentSphereClip = { ...this.currentSphereClip, x: newX, y: newY, z: newZ };
+          
+          if (this.clipDragCallback) {
+            this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
+          }
+        }
+      } else {
+        // Box clipping - determine which axis and side based on drag direction and camera
+        this._handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, evt.clientX, evt.clientY);
+      }
+    };
+
+    // Handle pointer up
+    this._clipPointerUp = () => {
+      if (this.clipDragEnabled) {
+        this.clipDragEnabled = false;
+        this.clipDragStart = null;
+        lastPointerPos = null;
+        // Re-attach camera controls
+        this.camera.attachControl(this.canvas, true);
+      }
+    };
+
+    // Handle touch events for 3-finger drag (move) and 4-finger drag (sphere resize)
+    this._clipTouchStart = (evt) => {
+      this.touchCount = evt.touches.length;
+      if (evt.touches.length === 3 || evt.touches.length === 4) {
+        evt.preventDefault();
+        this.clipDragEnabled = true;
+        this.clipDragType = evt.touches.length === 4 && this.currentClipMode === 'sphere' ? 'diameter' : 'position';
+        // Calculate center of all touches
+        let sumX = 0, sumY = 0;
+        for (let i = 0; i < evt.touches.length; i++) {
+          sumX += evt.touches[i].clientX;
+          sumY += evt.touches[i].clientY;
+        }
+        const centerX = sumX / evt.touches.length;
+        const centerY = sumY / evt.touches.length;
+        this.clipDragStart = { x: centerX, y: centerY };
+        lastPointerPos = { x: centerX, y: centerY };
+        this.boxDragAxis = null;
+        this.boxDragHandle = null;
+        this.boxDragInitialized = false;
+        this.camera.detachControl();
+      }
+    };
+
+    this._clipTouchMove = (evt) => {
+      if (!this.clipDragEnabled || (evt.touches.length !== 3 && evt.touches.length !== 4) || !lastPointerPos) return;
+      evt.preventDefault();
+      
+      // Calculate center of all touches
+      let sumX = 0, sumY = 0;
+      for (let i = 0; i < evt.touches.length; i++) {
+        sumX += evt.touches[i].clientX;
+        sumY += evt.touches[i].clientY;
+      }
+      const centerX = sumX / evt.touches.length;
+      const centerY = sumY / evt.touches.length;
+      
+      const deltaX = centerX - lastPointerPos.x;
+      const deltaY = centerY - lastPointerPos.y;
+      lastPointerPos = { x: centerX, y: centerY };
+      
+      const sensitivity = 0.003;
+      const camera = this.currentCamera;
+      const viewMatrix = camera.getViewMatrix();
+      const right = new BABYLON.Vector3(viewMatrix.m[0], viewMatrix.m[4], viewMatrix.m[8]);
+      const up = new BABYLON.Vector3(viewMatrix.m[1], viewMatrix.m[5], viewMatrix.m[9]);
+      
+      if (this.currentClipMode === 'sphere') {
+        const moveX = deltaX * sensitivity;
+        const moveY = deltaY * sensitivity;
+        
+        // For X and Z axes from vertical movement, invert when looking from above/below
+        let newX = this.currentSphereClip.x + right.x * moveX - up.x * moveY;
+        let newY = this.currentSphereClip.y + right.y * moveX + up.y * moveY;
+        let newZ = this.currentSphereClip.z + right.z * moveX - up.z * moveY;
+        
+        newX = Math.max(0, Math.min(1, newX));
+        newY = Math.max(0, Math.min(1, newY));
+        newZ = Math.max(0, Math.min(1, newZ));
+        
+        this.currentSphereClip = { ...this.currentSphereClip, x: newX, y: newY, z: newZ };
+        
+        if (this.clipDragCallback) {
+          this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
+        }
+      } else {
+        this._handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, centerX, centerY);
+      }
+    };
+
+    this._clipTouchEnd = (evt) => {
+      if (this.clipDragEnabled && evt.touches.length < 3) {
+        this.clipDragEnabled = false;
+        this.clipDragStart = null;
+        lastPointerPos = null;
+        this.clipDragType = null;
+        this.camera.attachControl(this.canvas, true);
+      }
+      this.touchCount = evt.touches.length;
+    };
+
+    // Add event listeners
+    this.canvas.addEventListener('pointerdown', this._clipPointerDown);
+    this.canvas.addEventListener('pointermove', this._clipPointerMove);
+    this.canvas.addEventListener('pointerup', this._clipPointerUp);
+    this.canvas.addEventListener('pointerleave', this._clipPointerUp);
+    this.canvas.addEventListener('touchstart', this._clipTouchStart, { passive: false });
+    this.canvas.addEventListener('touchmove', this._clipTouchMove, { passive: false });
+    this.canvas.addEventListener('touchend', this._clipTouchEnd);
+  }
+
+  _handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, clientX, clientY) {
+    const boxSensitivity = sensitivity * 4;
+    
+    // Initialize axis and handle on first significant movement
+    if (!this.boxDragInitialized) {
+      const absDeltaX = Math.abs(deltaX);
+      const absDeltaY = Math.abs(deltaY);
+      
+      // Need minimum movement to determine direction
+      if (absDeltaX < 3 && absDeltaY < 3) return;
+      
+      // Determine primary screen drag direction
+      const isHorizontalDrag = absDeltaX > absDeltaY;
+      const screenDir = isHorizontalDrag 
+        ? new BABYLON.Vector3(right.x, right.y, right.z)
+        : new BABYLON.Vector3(up.x, up.y, up.z);
+      
+      // Find which volume axis aligns most with the drag direction
+      const absX = Math.abs(screenDir.x);
+      const absY = Math.abs(screenDir.y);
+      const absZ = Math.abs(screenDir.z);
+      
+      if (absX >= absY && absX >= absZ) {
+        this.boxDragAxis = 'x';
+      } else if (absY >= absX && absY >= absZ) {
+        this.boxDragAxis = 'y';
+      } else {
+        this.boxDragAxis = 'z';
+      }
+      
+      // Determine which handle based on screen position and camera orientation
+      const canvasRect = this.canvas.getBoundingClientRect();
+      const relativeX = (clientX - canvasRect.left) / canvasRect.width;
+      const relativeY = (clientY - canvasRect.top) / canvasRect.height;
+      
+      // Get the relevant screen direction vector for the drag
+      const screenDirVector = isHorizontalDrag ? right : up;
+      
+      // Get the component of screen direction for the selected axis
+      let axisComponent = 0;
+      if (this.boxDragAxis === 'x') axisComponent = screenDirVector.x;
+      else if (this.boxDragAxis === 'y') axisComponent = screenDirVector.y;
+      else axisComponent = screenDirVector.z;
+      
+      // Determine screen position (0-1) in the drag direction
+      const relativePos = isHorizontalDrag ? relativeX : relativeY;
+      
+      // Right/bottom half of screen (relativePos > 0.5) corresponds to:
+      // - max handle if axisComponent > 0 (screen right = volume positive direction)
+      // - min handle if axisComponent < 0 (screen right = volume negative direction)
+      let isRightOrBottom = relativePos > 0.5;
+      
+      // For vertical drags affecting X or Z, invert screen position logic
+      if (!isHorizontalDrag && (this.boxDragAxis === 'x' || this.boxDragAxis === 'z')) {
+        isRightOrBottom = !isRightOrBottom;
+      }
+      // For horizontal drags affecting Y, invert screen position logic
+      if (isHorizontalDrag && this.boxDragAxis === 'y') {
+        isRightOrBottom = !isRightOrBottom;
+      }
+      
+      const isPositiveAxis = axisComponent > 0;
+      
+      // XOR logic: if both same, it's max; if different, it's min
+      this.boxDragHandle = (isRightOrBottom === isPositiveAxis) ? 'max' : 'min';
+      
+      this.boxDragInitialized = true;
+    }
+    
+    // Calculate movement in screen space
+    const absDeltaX = Math.abs(deltaX);
+    const absDeltaY = Math.abs(deltaY);
+    const isHorizontalDrag = absDeltaX > absDeltaY;
+    const screenDelta = isHorizontalDrag ? deltaX : deltaY;
+    
+    // Get the screen direction vector and its component for the axis
+    const screenDirVector = isHorizontalDrag ? right : up;
+    let axisComponent = 0;
+    if (this.boxDragAxis === 'x') axisComponent = screenDirVector.x;
+    else if (this.boxDragAxis === 'y') axisComponent = screenDirVector.y;
+    else axisComponent = screenDirVector.z;
+    
+    // Convert screen delta to volume axis delta
+    let volumeDelta = screenDelta * Math.sign(axisComponent) * boxSensitivity;
+    
+    // For vertical drags (looking from above/below), invert X and Z axis direction
+    if (!isHorizontalDrag && (this.boxDragAxis === 'x' || this.boxDragAxis === 'z')) {
+      volumeDelta = -volumeDelta;
+    }
+    
+    const bounds = { ...this.currentClipBounds };
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    
+    // Apply change to the locked axis and handle
+    // For min handle: positive volume delta = increase min (clip more from that side)
+    // For max handle: positive volume delta = increase max (expand), negative = clip more
+    if (this.boxDragHandle === 'min') {
+      if (this.boxDragAxis === 'x') {
+        bounds.xMin = clamp(bounds.xMin + volumeDelta, 0, bounds.xMax - 0.05);
+      } else if (this.boxDragAxis === 'y') {
+        bounds.yMin = clamp(bounds.yMin + volumeDelta, 0, bounds.yMax - 0.05);
+      } else {
+        bounds.zMin = clamp(bounds.zMin + volumeDelta, 0, bounds.zMax - 0.05);
+      }
+    } else {
+      if (this.boxDragAxis === 'x') {
+        bounds.xMax = clamp(bounds.xMax + volumeDelta, bounds.xMin + 0.05, 1);
+      } else if (this.boxDragAxis === 'y') {
+        bounds.yMax = clamp(bounds.yMax + volumeDelta, bounds.yMin + 0.05, 1);
+      } else {
+        bounds.zMax = clamp(bounds.zMax + volumeDelta, bounds.zMin + 0.05, 1);
+      }
+    }
+    
+    this.currentClipBounds = bounds;
+    
+    if (this.clipDragCallback) {
+      this.clipDragCallback({ type: 'box', value: bounds });
+    }
+  }
+
+  _removeClipDragListeners() {
+    if (this._clipPointerDown) {
+      this.canvas.removeEventListener('pointerdown', this._clipPointerDown);
+      this.canvas.removeEventListener('pointermove', this._clipPointerMove);
+      this.canvas.removeEventListener('pointerup', this._clipPointerUp);
+      this.canvas.removeEventListener('pointerleave', this._clipPointerUp);
+      this.canvas.removeEventListener('touchstart', this._clipTouchStart);
+      this.canvas.removeEventListener('touchmove', this._clipTouchMove);
+      this.canvas.removeEventListener('touchend', this._clipTouchEnd);
     }
   }
 }

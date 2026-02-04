@@ -286,6 +286,15 @@ const UltrasoundVisualizer = ({
         sceneManagerRef.current.initialize();
         sceneManagerRef.current.setBackgroundColor(backgroundColor);
         sceneManagerRef.current.setGlobalLightIntensity(globalLightIntensity);
+        
+        // Set up clip drag callback
+        sceneManagerRef.current.setClipDragCallback((update) => {
+          if (update.type === 'sphere') {
+            setVolumeSphereClip(update.value);
+          } else if (update.type === 'box') {
+            setVolumeClipBounds(update.value);
+          }
+        });
       }
 
       const renderLoop = (time) => {
@@ -542,6 +551,8 @@ const UltrasoundVisualizer = ({
           isosurface: volumeIsosurface,
           darkVolume: volumeDarkVolume,
         });
+        // Sync clip settings for drag functionality
+        sceneManagerRef.current.updateClipSettings(volumeSphereClip, volumeClipBounds, volumeClipMode);
       }
     }
   }, [renderMode, volumeThreshold, volumeStepSize, opacity, brightness, volumeRenderType, volumeLength, volumeClipBounds, volumeClipMode, volumeSphereClip, volumeCurve, volumeLighting, volumeTransferFunction, volumeIsosurface, volumeDarkVolume]);

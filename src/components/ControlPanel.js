@@ -586,6 +586,8 @@ const ControlPanel = ({
               boxSizing: 'border-box',
             }}>
               <ControlGroup isMobile={isMobile}>
+                {/* Hide general Opacity for Isosurface - it has its own opacity control */}
+                {volumeRenderType !== 2 && (
                 <ControlItem
                   icon={<FaEye />}
                   label="Opacity"
@@ -599,6 +601,7 @@ const ControlPanel = ({
                   displayValue={(v) => v.toFixed(2)}
                   isMobile={isMobile}
                 />
+                )}
                 <ControlItem
                   icon={<FaSun />}
                   label="Brightness"
@@ -742,6 +745,8 @@ const ControlPanel = ({
                         </div>
                       </div>
                     )}
+                    {/* Quality slider - HIDDEN, always at max (code preserved for future) */}
+                    {false && (
                     <ControlItem
                       icon={<FaLayerGroup />}
                       label="Quality"
@@ -753,6 +758,7 @@ const ControlPanel = ({
                       displayValue={(v) => v.toFixed(2)}
                       isMobile={isMobile}
                     />
+                    )}
                     <ControlItem
                       icon={<FaArrowsAltH />}
                       label="Volume Length"
