@@ -515,18 +515,39 @@ const ControlPanel = ({
             </div>
           )}
           
-          {!isMobile && (
-            <h3 style={{ 
-              margin: 0, 
-              marginBottom: '25px', 
-              color: '#ffffff', 
-              textAlign: 'center',
-              fontSize: '20px',
-              fontWeight: '500',
-              letterSpacing: '0.5px',
+          {/* Volume Type Tabs - only show in volume mode */}
+          {renderMode === 'volume' && setVolumeRenderType && (
+            <div style={{
+              display: 'flex',
+              marginBottom: '20px',
               borderBottom: '1px solid #404040',
-              paddingBottom: '15px'
-            }}>Control Panel</h3>
+              paddingBottom: '0'
+            }}>
+              {[
+                { value: 0, label: 'Accumulate' },
+                { value: 1, label: 'MIP' },
+                { value: 2, label: 'Isosurface' }
+              ].map(({ value, label }) => (
+                <div
+                  key={value}
+                  onClick={() => setVolumeRenderType(value)}
+                  style={{
+                    flex: 1,
+                    padding: '12px 8px',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: volumeRenderType === value ? '600' : '400',
+                    color: volumeRenderType === value ? '#3498db' : '#aaa',
+                    borderBottom: volumeRenderType === value ? '2px solid #3498db' : '2px solid transparent',
+                    marginBottom: '-1px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
           )}
           
           <div style={{ 
@@ -666,31 +687,6 @@ const ControlPanel = ({
                 {/* Volume Rendering Controls */}
                 {renderMode === 'volume' && setVolumeThreshold && (
                   <>
-                    <div style={{ marginBottom: '15px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                        <FaAdjust style={{ marginRight: '10px' }} />
-                        Volume Type:
-                      </label>
-                      <select 
-                        value={volumeRenderType || 0} 
-                        onChange={(e) => setVolumeRenderType(parseInt(e.target.value))}
-                        style={{ 
-                          width: '100%', 
-                          padding: '8px 10px',
-                          backgroundColor: '#333333',
-                          color: '#ffffff',
-                          border: '1px solid #404040',
-                          borderRadius: '6px',
-                          fontSize: isMobile ? '14px' : '16px',
-                          cursor: 'pointer',
-                          outline: 'none',
-                        }}
-                      >
-                        <option value={0}>Accumulate</option>
-                        <option value={1}>Max Intensity (MIP)</option>
-                        <option value={2}>Isosurface</option>
-                      </select>
-                    </div>
                     {/* Threshold - only show in Accumulate mode */}
                     {volumeRenderType === 0 && (
                       <ControlItem
@@ -1008,7 +1004,9 @@ const ControlPanel = ({
                       </select>
                     </div>
                     
-                    {/* Visualization Presets and Curve Controls */}
+                    {/* Visualization Presets and Curve Controls - only for Accumulate mode */}
+                    {volumeRenderType === 0 && (
+                    <>
                     <div style={{ marginTop: '15px', marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                         <FaAdjust style={{ marginRight: '10px' }} />
@@ -1097,7 +1095,7 @@ const ControlPanel = ({
                       </div>
                     </div>
                     
-                    {/* Dark Volume Controls */}
+                    {/* Dark Volume Controls - only for Accumulate mode */}
                     <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #404040' }}>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -1189,6 +1187,8 @@ const ControlPanel = ({
                         </div>
                       )}
                     </div>
+                    </>
+                    )}
                 </ControlGroup>
               )}
                 
