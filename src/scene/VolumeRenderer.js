@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { volumeVertexShader, volumeFragmentShader } from '../shaders/volumeShaders';
+import { loadShaders } from '../shaders/volumeShaders';
 
 class VolumeRenderer {
   constructor(scene) {
@@ -32,12 +32,17 @@ class VolumeRenderer {
     };
   }
 
-  initialize(volumeTexture, dimensions) {
+  async initialize(volumeTexture, dimensions) {
     if (this.isInitialized) {
       this.dispose();
     }
 
     this.volumeTexture = volumeTexture;
+
+    // Load shaders
+    const shaders = await loadShaders();
+    BABYLON.Effect.ShadersStore['volumeVertexShader'] = shaders.volumeVertexShader;
+    BABYLON.Effect.ShadersStore['volumeFragmentShader'] = shaders.volumeFragmentShader;
 
     // Create bounding box mesh (unit cube)
     this.mesh = BABYLON.MeshBuilder.CreateBox('volumeBox', {
@@ -64,9 +69,6 @@ class VolumeRenderer {
     this.boundingBoxMesh.isVisible = false; // Hidden by default
 
     // Create custom shader material
-    BABYLON.Effect.ShadersStore['volumeVertexShader'] = volumeVertexShader;
-    BABYLON.Effect.ShadersStore['volumeFragmentShader'] = volumeFragmentShader;
-
     this.material = new BABYLON.ShaderMaterial('volumeMaterial', this.scene, {
       vertex: 'volume',
       fragment: 'volume',

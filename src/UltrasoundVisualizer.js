@@ -420,7 +420,7 @@ const UltrasoundVisualizer = ({
               const volumeTexture = volTex.createFromFrames(allBitmaps);
               if (volumeTexture) {
                 volumeTextureRef.current = volTex;
-                sceneManagerRef.current.initializeVolumeRenderer(
+                await sceneManagerRef.current.initializeVolumeRenderer(
                   volumeTexture,
                   volTex.getDimensions()
                 );
