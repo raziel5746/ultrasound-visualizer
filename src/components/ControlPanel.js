@@ -436,6 +436,8 @@ const ControlPanel = ({
   setVolumeSphereClip,
   volumeCurve,
   setVolumeCurve,
+  volumeDarkVolume,
+  setVolumeDarkVolume,
 }) => {
   const convertNonLinear = (value, maxOutput) => {
     if (value <= 0.2) {
@@ -513,18 +515,39 @@ const ControlPanel = ({
             </div>
           )}
           
-          {!isMobile && (
-            <h3 style={{ 
-              margin: 0, 
-              marginBottom: '25px', 
-              color: '#ffffff', 
-              textAlign: 'center',
-              fontSize: '20px',
-              fontWeight: '500',
-              letterSpacing: '0.5px',
+          {/* Volume Type Tabs - only show in volume mode */}
+          {renderMode === 'volume' && setVolumeRenderType && (
+            <div style={{
+              display: 'flex',
+              marginBottom: '20px',
               borderBottom: '1px solid #404040',
-              paddingBottom: '15px'
-            }}>Control Panel</h3>
+              paddingBottom: '0'
+            }}>
+              {[
+                { value: 0, label: 'Accumulate' },
+                { value: 1, label: 'MIP' },
+                { value: 2, label: 'Isosurface' }
+              ].map(({ value, label }) => (
+                <div
+                  key={value}
+                  onClick={() => setVolumeRenderType(value)}
+                  style={{
+                    flex: 1,
+                    padding: '12px 8px',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: volumeRenderType === value ? '600' : '400',
+                    color: volumeRenderType === value ? '#3498db' : '#aaa',
+                    borderBottom: volumeRenderType === value ? '2px solid #3498db' : '2px solid transparent',
+                    marginBottom: '-1px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
           )}
           
           <div style={{ 
@@ -664,31 +687,6 @@ const ControlPanel = ({
                 {/* Volume Rendering Controls */}
                 {renderMode === 'volume' && setVolumeThreshold && (
                   <>
-                    <div style={{ marginBottom: '15px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                        <FaAdjust style={{ marginRight: '10px' }} />
-                        Volume Type:
-                      </label>
-                      <select 
-                        value={volumeRenderType || 0} 
-                        onChange={(e) => setVolumeRenderType(parseInt(e.target.value))}
-                        style={{ 
-                          width: '100%', 
-                          padding: '8px 10px',
-                          backgroundColor: '#333333',
-                          color: '#ffffff',
-                          border: '1px solid #404040',
-                          borderRadius: '6px',
-                          fontSize: isMobile ? '14px' : '16px',
-                          cursor: 'pointer',
-                          outline: 'none',
-                        }}
-                      >
-                        <option value={0}>Accumulate</option>
-                        <option value={1}>Max Intensity (MIP)</option>
-                        <option value={2}>Isosurface</option>
-                      </select>
-                    </div>
                     {/* Threshold - only show in Accumulate mode */}
                     {volumeRenderType === 0 && (
                       <ControlItem
@@ -909,7 +907,8 @@ const ControlPanel = ({
               {renderMode === 'volume' && setVolumeThreshold && (
                 <ControlGroup isMobile={isMobile} style={{ marginTop: '15px' }}>
                     
-                    {/* Volume Lighting/Shading Controls */}
+                    {/* Volume Lighting/Shading Controls - HIDDEN but code preserved for future use */}
+                    {false && (
                     <div style={{ marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -973,6 +972,7 @@ const ControlPanel = ({
                         </div>
                       )}
                     </div>
+                    )}
                     
                     {/* Transfer Function / Color Map for Volume */}
                     <div style={{ marginTop: '15px', marginBottom: '10px' }}>
@@ -1006,7 +1006,8 @@ const ControlPanel = ({
                       </select>
                     </div>
                     
-                    {/* Visualization Presets and Curve Controls */}
+                    {/* Visualization Presets and Curve Controls - only for Accumulate mode */}
+                    {volumeRenderType === 0 && (
                     <div style={{ marginTop: '15px', marginBottom: '10px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                         <FaAdjust style={{ marginRight: '10px' }} />
@@ -1094,6 +1095,102 @@ const ControlPanel = ({
                         />
                       </div>
                     </div>
+                    )}
+                    
+                    {/* Dark Volume Controls - for Accumulate and MIP modes */}
+                    {(volumeRenderType === 0 || volumeRenderType === 1) && (
+                    <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #404040' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          <FaAdjust style={{ marginRight: '10px' }} />
+                          Dark Volume Rendering
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={volumeDarkVolume?.enabled || false}
+                          onChange={(e) => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, enabled: e.target.checked}))}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </label>
+                      <p style={{ fontSize: '11px', color: '#888', marginBottom: '12px', lineHeight: 1.4 }}>
+                        Render dark/low-intensity areas as solid volumes (useful for fluid-filled structures)
+                      </p>
+                      
+                      {volumeDarkVolume?.enabled && (
+                        <div style={{ fontSize: '12px' }}>
+                          {/* Dark Threshold slider */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ color: '#aaa' }}>Dark Threshold</span>
+                              <span style={{ color: '#666' }}>{(volumeDarkVolume?.threshold || 0.15).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.01"
+                              max="0.5"
+                              step="0.01"
+                              value={volumeDarkVolume?.threshold || 0.15}
+                              onChange={(e) => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, threshold: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Dark Opacity slider */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ color: '#aaa' }}>Dark Volume Opacity</span>
+                              <span style={{ color: '#666' }}>{(volumeDarkVolume?.opacity || 0.5).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.1"
+                              max="1.0"
+                              step="0.05"
+                              value={volumeDarkVolume?.opacity || 0.5}
+                              onChange={(e) => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, opacity: parseFloat(e.target.value)}))}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                          
+                          {/* Dark Color picker */}
+                          <div style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <span style={{ color: '#aaa' }}>Dark Volume Color</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {[
+                                { name: 'Blue', color: { r: 0.2, g: 0.4, b: 0.8 } },
+                                { name: 'Cyan', color: { r: 0.1, g: 0.7, b: 0.8 } },
+                                { name: 'Purple', color: { r: 0.5, g: 0.2, b: 0.8 } },
+                                { name: 'Green', color: { r: 0.2, g: 0.7, b: 0.3 } },
+                                { name: 'Orange', color: { r: 0.9, g: 0.5, b: 0.1 } },
+                                { name: 'Red', color: { r: 0.8, g: 0.2, b: 0.2 } },
+                              ].map(({ name, color }) => (
+                                <div
+                                  key={name}
+                                  onClick={() => setVolumeDarkVolume && setVolumeDarkVolume(prev => ({...prev, color}))}
+                                  title={name}
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '4px',
+                                    backgroundColor: `rgb(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)})`,
+                                    cursor: 'pointer',
+                                    border: volumeDarkVolume?.color?.r === color.r && 
+                                            volumeDarkVolume?.color?.g === color.g && 
+                                            volumeDarkVolume?.color?.b === color.b 
+                                      ? '2px solid #fff' 
+                                      : '2px solid transparent',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    )}
                 </ControlGroup>
               )}
                 

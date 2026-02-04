@@ -36,6 +36,12 @@ uniform float isoLevel;      // Isosurface intensity level
 uniform float isoSmoothness; // Step multiplier for smoother surfaces
 uniform float isoOpacity;    // Surface opacity
 
+// Dark volume uniforms - render low-intensity areas as solid
+uniform int darkVolumeEnabled;   // 0 = disabled, 1 = enabled
+uniform float darkThreshold;     // Intensity below this is considered "dark" (0-1)
+uniform vec3 darkColor;          // Color for dark volumes
+uniform float darkOpacity;       // Opacity multiplier for dark volumes
+
 varying vec3 vRayDir;
 varying vec3 vPosition;
 varying vec3 vTransformedEye;
@@ -175,6 +181,27 @@ vec4 transferFunction(float intensity) {
     return vec4(color, alpha);
 }
 
+// Transfer function for dark volumes - inverted logic
+vec4 darkTransferFunction(float intensity) {
+    // Exclude pure black areas (the border/empty regions around the ultrasound cone)
+    // Only consider areas with SOME intensity as potential dark volumes
+    // This prevents the black border from being rendered as solid
+    float minIntensityFloor = 0.02; // Areas below this are considered empty/border
+    
+    if (intensity < minIntensityFloor) {
+        return vec4(0.0); // Completely transparent for pure black areas
+    }
+    
+    // Dark volumes: intensity BELOW darkThreshold (but above floor) is solid
+    // Use smooth transition for soft edges
+    float darkAlpha = smoothstep(darkThreshold, minIntensityFloor, intensity);
+    
+    // Apply dark opacity multiplier
+    darkAlpha *= darkOpacity * opacity;
+    
+    return vec4(darkColor, darkAlpha);
+}
+
 void main() {
     vec3 rayDir = normalize(vRayDir);
     vec2 tHit = intersectBox(vTransformedEye, rayDir);
@@ -187,6 +214,9 @@ void main() {
     
     vec4 accumulatedColor = vec4(0.0);
     float maxIntensity = 0.0;
+    float minIntensity = 1.0; // Track minimum for dark volumes in MIP mode
+    float minIntensityT = 0.0; // Position along ray where minimum was found
+    float maxIntensityT = 0.0; // Position along ray where maximum was found
     float prevIntensity = 0.0;
     bool foundIsosurface = false;
     vec3 isosurfacePos = vec3(0.0);
@@ -243,8 +273,16 @@ void main() {
         float intensity = texture(volumeTexture, samplePos).r;
         
         if (renderMode == 1) {
-            // Maximum Intensity Projection
-            maxIntensity = max(maxIntensity, intensity);
+            // Maximum Intensity Projection - track position of max
+            if (intensity > maxIntensity) {
+                maxIntensity = intensity;
+                maxIntensityT = t;
+            }
+            // Also track minimum for dark volume rendering (exclude pure black borders)
+            if (intensity > 0.02 && intensity < minIntensity) {
+                minIntensity = intensity;
+                minIntensityT = t;
+            }
         } else if (renderMode == 2) {
             // Isosurface rendering - detect threshold crossing
             if (!foundIsosurface && prevIntensity < isoLevel && intensity >= isoLevel) {
@@ -269,6 +307,30 @@ void main() {
                 sampleColor.rgb = applyLighting(sampleColor.rgb, gradient, viewDir, lightDir);
             }
             
+            // Also sample dark volumes if enabled
+            if (darkVolumeEnabled == 1) {
+                vec4 darkSample = darkTransferFunction(intensity);
+                
+                // Apply lighting to dark volumes if enabled
+                if (lightingEnabled == 1 && darkSample.a > 0.01) {
+                    vec3 gradient = computeGradient(samplePos);
+                    vec3 viewDir = -rayDir;
+                    vec3 lightDir = viewDir;
+                    darkSample.rgb = applyLighting(darkSample.rgb, gradient, viewDir, lightDir);
+                }
+                
+                // Blend dark and bright samples - dark takes priority for low intensity
+                // If both have alpha, blend based on which is more relevant
+                if (darkSample.a > sampleColor.a) {
+                    sampleColor = darkSample;
+                } else if (darkSample.a > 0.01 && sampleColor.a > 0.01) {
+                    // Blend them when both are present
+                    float totalAlpha = sampleColor.a + darkSample.a;
+                    sampleColor.rgb = (sampleColor.rgb * sampleColor.a + darkSample.rgb * darkSample.a) / totalAlpha;
+                    sampleColor.a = min(totalAlpha, 1.0);
+                }
+            }
+            
             accumulatedColor.rgb += (1.0 - accumulatedColor.a) * sampleColor.rgb * sampleColor.a;
             accumulatedColor.a += (1.0 - accumulatedColor.a) * sampleColor.a;
             
@@ -288,7 +350,24 @@ void main() {
             mipColor = mipColor * (ambient + diffuse * 0.5);
         }
         
-        gl_FragColor = vec4(mipColor, 1.0);
+        // Blend dark volumes if enabled - depth-aware
+        if (darkVolumeEnabled == 1 && minIntensity < darkThreshold && minIntensity < 1.0) {
+            // Calculate dark volume contribution based on how dark the minimum was
+            float darkAlpha = smoothstep(darkThreshold, 0.02, minIntensity) * darkOpacity;
+            
+            // Check if dark region is in front of (closer than) bright region
+            // If dark is in front, blend more; if behind, blend less
+            if (minIntensityT < maxIntensityT) {
+                // Dark is in FRONT of bright - show dark with full strength
+                mipColor = mix(mipColor, darkColor, darkAlpha);
+            } else {
+                // Dark is BEHIND bright - reduce effect based on bright intensity
+                float behindFactor = 1.0 - smoothstep(0.2, 0.6, maxIntensity);
+                mipColor = mix(mipColor, darkColor, darkAlpha * behindFactor);
+            }
+        }
+        
+        gl_FragColor = vec4(mipColor, opacity);
     } else if (renderMode == 2) {
         // Isosurface rendering
         if (!foundIsosurface) {
