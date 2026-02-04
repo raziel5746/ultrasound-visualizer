@@ -378,6 +378,126 @@ export const ControlGroup = ({ children, isMobile, style }) => (
   </div>
 );
 
+const PresetManager = ({ volumeRenderType, currentSettings, applySettings }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [presets, setPresets] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [settingsBeforePreview, setSettingsBeforePreview] = useState(null);
+
+  const typeNames = ['accumulate', 'mip', 'isosurface'];
+  const typeName = typeNames[volumeRenderType] || 'accumulate';
+  const storageKey = `volumePresets_${typeName}`;
+
+  const loadPresets = () => {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    setPresets(saved);
+    return saved;
+  };
+
+  const handleSave = () => {
+    const name = prompt('Enter a name for this preset:');
+    if (!name || !name.trim()) return;
+    
+    const settings = {
+      name: name.trim(),
+      type: typeName,
+      timestamp: Date.now(),
+      ...currentSettings
+    };
+    
+    const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    existing.push(settings);
+    localStorage.setItem(storageKey, JSON.stringify(existing));
+    setPresets(existing);
+  };
+
+  const handleLoad = () => {
+    const saved = loadPresets();
+    if (saved.length === 0) {
+      alert(`No saved presets for ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} mode`);
+      return;
+    }
+    setSettingsBeforePreview({ ...currentSettings });
+    setSelectedIndex(null);
+    setIsExpanded(true);
+  };
+
+  const handlePresetClick = (index) => {
+    setSelectedIndex(index);
+    applySettings(presets[index]);
+  };
+
+  const handleApply = () => {
+    setIsExpanded(false);
+    setSettingsBeforePreview(null);
+    setSelectedIndex(null);
+  };
+
+  const handleCancel = () => {
+    if (settingsBeforePreview) {
+      applySettings(settingsBeforePreview);
+    }
+    setIsExpanded(false);
+    setSettingsBeforePreview(null);
+    setSelectedIndex(null);
+  };
+
+  const handleDelete = (index, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete preset "${presets[index].name}"?`)) return;
+    const updated = presets.filter((_, i) => i !== index);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    setPresets(updated);
+    if (selectedIndex === index) {
+      setSelectedIndex(null);
+      if (settingsBeforePreview) applySettings(settingsBeforePreview);
+    }
+  };
+
+  const buttonStyle = {
+    flex: 1, padding: '8px 12px', fontSize: '12px',
+    backgroundColor: '#2a2a2a', color: '#aaa', border: '1px solid #404040',
+    borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s'
+  };
+
+  return (
+    <div style={{ marginBottom: '15px' }}>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button onClick={handleSave} style={buttonStyle}>Save</button>
+        <button onClick={handleLoad} style={buttonStyle}>Load</button>
+      </div>
+      {isExpanded && (
+        <div style={{ marginTop: '8px', backgroundColor: '#222', borderRadius: '4px', border: '1px solid #404040', overflow: 'hidden' }}>
+          <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            {presets.map((preset, index) => (
+              <div
+                key={index}
+                onClick={() => handlePresetClick(index)}
+                style={{
+                  padding: '8px 12px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  backgroundColor: selectedIndex === index ? '#3498db33' : 'transparent',
+                  borderBottom: index < presets.length - 1 ? '1px solid #333' : 'none'
+                }}
+              >
+                <span style={{ color: selectedIndex === index ? '#3498db' : '#aaa', fontSize: '12px' }}>{preset.name}</span>
+                <button
+                  onClick={(e) => handleDelete(index, e)}
+                  style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '12px', padding: '2px 6px' }}
+                  title="Delete preset"
+                >🗑️</button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', padding: '8px', borderTop: '1px solid #404040' }}>
+            <button onClick={handleCancel} style={{ ...buttonStyle, backgroundColor: '#5a2a2a', color: '#f88' }}>Cancel</button>
+            <button onClick={handleApply} style={{ ...buttonStyle, backgroundColor: '#2a5a2a', color: '#8f8' }}>Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ControlPanel = ({ 
   stackLength, setStackLength,
   framePercentage, setFramePercentage,
@@ -517,9 +637,10 @@ const ControlPanel = ({
           
           {/* Volume Type Tabs - only show in volume mode */}
           {renderMode === 'volume' && setVolumeRenderType && (
+            <>
             <div style={{
               display: 'flex',
-              marginBottom: '20px',
+              marginBottom: '10px',
               borderBottom: '1px solid #404040',
               paddingBottom: '0'
             }}>
@@ -548,6 +669,30 @@ const ControlPanel = ({
                 </div>
               ))}
             </div>
+            {/* Save/Load Settings Buttons */}
+            <PresetManager
+              volumeRenderType={volumeRenderType}
+              currentSettings={{
+                opacity, brightness, volumeThreshold,
+                volumeClipBounds, volumeClipMode, volumeSphereClip,
+                volumeCurve, volumeDarkVolume, volumeIsosurface,
+                volumeTransferFunction, volumeLength
+              }}
+              applySettings={(settings) => {
+                if (settings.opacity !== undefined) setOpacity(settings.opacity);
+                if (settings.brightness !== undefined) setBrightness(settings.brightness);
+                if (settings.volumeThreshold !== undefined) setVolumeThreshold(settings.volumeThreshold);
+                if (settings.volumeClipBounds !== undefined) setVolumeClipBounds(settings.volumeClipBounds);
+                if (settings.volumeClipMode !== undefined) setVolumeClipMode(settings.volumeClipMode);
+                if (settings.volumeSphereClip !== undefined) setVolumeSphereClip(settings.volumeSphereClip);
+                if (settings.volumeCurve !== undefined) setVolumeCurve(settings.volumeCurve);
+                if (settings.volumeDarkVolume !== undefined) setVolumeDarkVolume(settings.volumeDarkVolume);
+                if (settings.volumeIsosurface !== undefined) setVolumeIsosurface(settings.volumeIsosurface);
+                if (settings.volumeTransferFunction !== undefined) setVolumeTransferFunction(settings.volumeTransferFunction);
+                if (settings.volumeLength !== undefined) setVolumeLength(settings.volumeLength);
+              }}
+            />
+            </>
           )}
           
           <div style={{ 
@@ -586,6 +731,8 @@ const ControlPanel = ({
               boxSizing: 'border-box',
             }}>
               <ControlGroup isMobile={isMobile}>
+                {/* Hide general Opacity for Isosurface - it has its own opacity control */}
+                {volumeRenderType !== 2 && (
                 <ControlItem
                   icon={<FaEye />}
                   label="Opacity"
@@ -599,6 +746,7 @@ const ControlPanel = ({
                   displayValue={(v) => v.toFixed(2)}
                   isMobile={isMobile}
                 />
+                )}
                 <ControlItem
                   icon={<FaSun />}
                   label="Brightness"
@@ -742,6 +890,8 @@ const ControlPanel = ({
                         </div>
                       </div>
                     )}
+                    {/* Quality slider - HIDDEN, always at max (code preserved for future) */}
+                    {false && (
                     <ControlItem
                       icon={<FaLayerGroup />}
                       label="Quality"
@@ -753,6 +903,7 @@ const ControlPanel = ({
                       displayValue={(v) => v.toFixed(2)}
                       isMobile={isMobile}
                     />
+                    )}
                     <ControlItem
                       icon={<FaArrowsAltH />}
                       label="Volume Length"
