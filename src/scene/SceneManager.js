@@ -685,13 +685,13 @@ class SceneManager {
     
     // Check if clip drag should be active
     const shouldActivateClipDrag = (evt) => {
-      // Desktop: shift + drag = move clipping (both box and sphere)
-      if (evt.shiftKey && !evt.ctrlKey && evt.button === 0) {
+      // Desktop: ctrl + shift + drag = move position (both box and sphere)
+      if (evt.ctrlKey && evt.shiftKey && evt.button === 0) {
         return 'position';
       }
-      // Desktop: ctrl + shift + drag = resize sphere (only in sphere mode)
-      if (evt.ctrlKey && evt.shiftKey && evt.button === 0 && this.currentClipMode === 'sphere') {
-        return 'diameter';
+      // Desktop: shift only + drag = resize/adjust handles (sphere diameter or box handles)
+      if (evt.shiftKey && !evt.ctrlKey && evt.button === 0) {
+        return 'resize';
       }
       return false;
     };
@@ -734,8 +734,9 @@ class SceneManager {
       const right = new BABYLON.Vector3(viewMatrix.m[0], viewMatrix.m[4], viewMatrix.m[8]);
       const up = new BABYLON.Vector3(viewMatrix.m[1], viewMatrix.m[5], viewMatrix.m[9]);
       
-      if (this.currentClipMode === 'sphere') {
-        if (this.clipDragType === 'diameter') {
+      if (this.clipDragType === 'resize') {
+        // Resize mode: sphere diameter or box handles
+        if (this.currentClipMode === 'sphere') {
           // Change sphere diameter based on horizontal drag
           const diameterSensitivity = 0.005;
           const diameterDelta = deltaX * diameterSensitivity;
@@ -748,6 +749,12 @@ class SceneManager {
             this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
           }
         } else {
+          // Box handles - use existing handle-based drag logic
+          this._handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, evt.clientX, evt.clientY);
+        }
+      } else {
+        // Position mode: move sphere center or entire box region
+        if (this.currentClipMode === 'sphere') {
           // Move sphere position based on screen drag
           const moveX = deltaX * sensitivity;
           const moveY = deltaY * sensitivity;
@@ -768,10 +775,10 @@ class SceneManager {
           if (this.clipDragCallback) {
             this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
           }
+        } else {
+          // Move entire box region (shift both min and max together)
+          this._handleBoxClipMove(deltaX, deltaY, right, up, sensitivity);
         }
-      } else {
-        // Box clipping - determine which axis and side based on drag direction and camera
-        this._handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, evt.clientX, evt.clientY);
       }
     };
 
@@ -786,13 +793,14 @@ class SceneManager {
       }
     };
 
-    // Handle touch events for 3-finger drag (move) and 4-finger drag (sphere resize)
+    // Handle touch events for 3-finger drag (resize) and 4-finger drag (move position)
     this._clipTouchStart = (evt) => {
       this.touchCount = evt.touches.length;
       if (evt.touches.length === 3 || evt.touches.length === 4) {
         evt.preventDefault();
         this.clipDragEnabled = true;
-        this.clipDragType = evt.touches.length === 4 && this.currentClipMode === 'sphere' ? 'diameter' : 'position';
+        // 3 fingers = resize (sphere diameter or box handles), 4 fingers = move position
+        this.clipDragType = evt.touches.length === 3 ? 'resize' : 'position';
         // Calculate center of all touches
         let sumX = 0, sumY = 0;
         for (let i = 0; i < evt.touches.length; i++) {
@@ -833,26 +841,38 @@ class SceneManager {
       const right = new BABYLON.Vector3(viewMatrix.m[0], viewMatrix.m[4], viewMatrix.m[8]);
       const up = new BABYLON.Vector3(viewMatrix.m[1], viewMatrix.m[5], viewMatrix.m[9]);
       
-      if (this.currentClipMode === 'sphere') {
-        const moveX = deltaX * sensitivity;
-        const moveY = deltaY * sensitivity;
-        
-        // For X and Z axes from vertical movement, invert when looking from above/below
-        let newX = this.currentSphereClip.x + right.x * moveX - up.x * moveY;
-        let newY = this.currentSphereClip.y + right.y * moveX + up.y * moveY;
-        let newZ = this.currentSphereClip.z + right.z * moveX - up.z * moveY;
-        
-        newX = Math.max(0, Math.min(1, newX));
-        newY = Math.max(0, Math.min(1, newY));
-        newZ = Math.max(0, Math.min(1, newZ));
-        
-        this.currentSphereClip = { ...this.currentSphereClip, x: newX, y: newY, z: newZ };
-        
-        if (this.clipDragCallback) {
-          this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
+      if (this.clipDragType === 'resize') {
+        // 3 fingers = resize (sphere diameter or box handles)
+        if (this.currentClipMode === 'sphere') {
+          const diameterSensitivity = 0.006;
+          const diameterDelta = deltaX * diameterSensitivity;
+          let newDiameter = this.currentSphereClip.diameter + diameterDelta;
+          newDiameter = Math.max(0.05, Math.min(2, newDiameter));
+          this.currentSphereClip = { ...this.currentSphereClip, diameter: newDiameter };
+          if (this.clipDragCallback) {
+            this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
+          }
+        } else {
+          this._handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, centerX, centerY);
         }
       } else {
-        this._handleBoxClipDrag(deltaX, deltaY, right, up, sensitivity, centerX, centerY);
+        // 4 fingers = move position
+        if (this.currentClipMode === 'sphere') {
+          const moveX = deltaX * sensitivity;
+          const moveY = deltaY * sensitivity;
+          let newX = this.currentSphereClip.x + right.x * moveX - up.x * moveY;
+          let newY = this.currentSphereClip.y + right.y * moveX + up.y * moveY;
+          let newZ = this.currentSphereClip.z + right.z * moveX - up.z * moveY;
+          newX = Math.max(0, Math.min(1, newX));
+          newY = Math.max(0, Math.min(1, newY));
+          newZ = Math.max(0, Math.min(1, newZ));
+          this.currentSphereClip = { ...this.currentSphereClip, x: newX, y: newY, z: newZ };
+          if (this.clipDragCallback) {
+            this.clipDragCallback({ type: 'sphere', value: this.currentSphereClip });
+          }
+        } else {
+          this._handleBoxClipMove(deltaX, deltaY, right, up, sensitivity);
+        }
       }
     };
 
@@ -994,6 +1014,57 @@ class SceneManager {
         bounds.zMax = clamp(bounds.zMax + volumeDelta, bounds.zMin + 0.05, 1);
       }
     }
+    
+    this.currentClipBounds = bounds;
+    
+    if (this.clipDragCallback) {
+      this.clipDragCallback({ type: 'box', value: bounds });
+    }
+  }
+
+  _handleBoxClipMove(deltaX, deltaY, right, up, sensitivity) {
+    // Move entire box region (shift both min and max together)
+    const moveSensitivity = sensitivity * 1.5;
+    const moveX = deltaX * moveSensitivity;
+    const moveY = deltaY * moveSensitivity;
+    
+    // Project movement onto volume axes
+    // For X and Z axes from vertical movement, invert when looking from above/below
+    const volumeDeltaX = right.x * moveX - up.x * moveY;
+    const volumeDeltaY = right.y * moveX + up.y * moveY;
+    const volumeDeltaZ = right.z * moveX - up.z * moveY;
+    
+    const bounds = { ...this.currentClipBounds };
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    
+    // Keep range sizes constant
+    const rangeX = bounds.xMax - bounds.xMin;
+    const rangeY = bounds.yMax - bounds.yMin;
+    const rangeZ = bounds.zMax - bounds.zMin;
+    
+    // Move X bounds
+    let newXMin = bounds.xMin + volumeDeltaX;
+    let newXMax = bounds.xMax + volumeDeltaX;
+    if (newXMin < 0) { newXMin = 0; newXMax = rangeX; }
+    if (newXMax > 1) { newXMax = 1; newXMin = 1 - rangeX; }
+    bounds.xMin = clamp(newXMin, 0, 1);
+    bounds.xMax = clamp(newXMax, 0, 1);
+    
+    // Move Y bounds
+    let newYMin = bounds.yMin + volumeDeltaY;
+    let newYMax = bounds.yMax + volumeDeltaY;
+    if (newYMin < 0) { newYMin = 0; newYMax = rangeY; }
+    if (newYMax > 1) { newYMax = 1; newYMin = 1 - rangeY; }
+    bounds.yMin = clamp(newYMin, 0, 1);
+    bounds.yMax = clamp(newYMax, 0, 1);
+    
+    // Move Z bounds
+    let newZMin = bounds.zMin + volumeDeltaZ;
+    let newZMax = bounds.zMax + volumeDeltaZ;
+    if (newZMin < 0) { newZMin = 0; newZMax = rangeZ; }
+    if (newZMax > 1) { newZMax = 1; newZMin = 1 - rangeZ; }
+    bounds.zMin = clamp(newZMin, 0, 1);
+    bounds.zMax = clamp(newZMax, 0, 1);
     
     this.currentClipBounds = bounds;
     

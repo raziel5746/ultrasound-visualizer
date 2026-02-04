@@ -490,7 +490,27 @@ const UltrasoundVisualizer = ({
                   volumeTexture,
                   volTex.getDimensions()
                 );
-                console.log('Volume texture created successfully');
+                // Apply current settings immediately after initialization
+                sceneManagerRef.current.updateVolumeSettings({
+                  threshold: volumeThreshold,
+                  stepSize: volumeStepSize,
+                  opacity: opacity,
+                  brightness: brightness,
+                  renderMode: volumeRenderType,
+                  volumeLength: volumeLength,
+                  clipBounds: volumeClipBounds,
+                  clipMode: volumeClipMode,
+                  sphereClip: volumeSphereClip,
+                  gamma: volumeCurve.gamma,
+                  softness: volumeCurve.softness,
+                  minOpacity: volumeCurve.minOpacity,
+                  lighting: volumeLighting,
+                  transferFunction: volumeTransferFunction,
+                  isosurface: volumeIsosurface,
+                  darkVolume: volumeDarkVolume,
+                });
+                sceneManagerRef.current.updateClipSettings(volumeSphereClip, volumeClipBounds, volumeClipMode);
+                console.log('Volume texture created and settings applied');
               }
             }
           } catch (volError) {
